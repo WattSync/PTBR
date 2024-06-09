@@ -1,46 +1,104 @@
-#include <Adafruit_GFX.h>    // Core graphics library
-#include <Adafruit_ST7735.h> // Hardware-specific library
+#include <WiFi.h>
+#include <WiFiManager.h>
+#include <WebServer.h>
+#include <ArduinoJson.h>
+#include <ESPmDNS.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7735.h>
+#include "screens.h"  // Certifique-se de que este arquivo está corretamente configurado
 
-//#include "bitmaps.h"
-#include "screens.h"
-
-// For the breakout, you can use any 2 or 3 pins
-// These pins will also work for the 1.8" TFT shield
-#define TFT_CS    10  // Chip select control pin
-#define TFT_RST   7  // Reset pin (could connect to RST pin)
+#define TFT_CS    10
+#define TFT_RST   7
 #define TFT_DC    6
-#define LED_PIN   15 
+#define LED_PIN   15
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
+WebServer server(80);
+bool tema = true;
+int brilho = 255; // Inicializa com brilho máximo
+
+
+void handleReceberDados() {
+  if (server.hasArg("plain")) {
+    String dados = server.arg("plain");
+    Serial.println(dados);
+
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, dados);
+    tema = doc["temaJSON"];
+    brilho = doc["brilhoJSON"];
+
+    
+    server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
+    
+  
+  } else {
+    server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
+  }
+}
+
 void setup() {
-    tft.initR(INITR_BLACKTAB);  // Inicializa o display
-    tft.setRotation(2);
-    tft.fillScreen(ST7735_BLACK);
+  Serial.begin(115200);
 
-    pinMode(LED_PIN, OUTPUT);
-    analogWrite(LED_PIN, 255);  // Define o valor PWM do LED como 255 (brilho máximo)
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("LedPwm");
 
-    // Case 2: Multi Colored Images/Icons
-    int h = 160, w = 128, row, col, buffidx = 0;
-    for (row = 0; row < h; row++) { // Para cada linha...
-        for (col = 0; col < w; col++) { // Para cada pixel...
-            // Para ler da memória Flash, é necessário usar pgm_read_XXX.
-            // Como a imagem é armazenada como uint16_t, usa-se pgm_read_word para endereçamento de 16 bits
-            tft.drawPixel(col, row, pgm_read_word(splash_screen_black + buffidx));
-            buffidx++;
-        } // fim do pixel
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Conectado ao Wi-Fi.");
+    Serial.println(WiFi.localIP());
+
+    if (!MDNS.begin("ledpwm")) {
+      Serial.println("Erro ao iniciar o serviço mDNS.");
+    } else {
+      Serial.println("Serviço mDNS iniciado.");
     }
-    delay(1500);
+    
+    server.on("/receber-dados", HTTP_POST, handleReceberDados);
+    server.begin();
+  } else {
+    Serial.println("Não foi possível conectar ao Wi-Fi.");
+  }
 
-    // Exibir tela branca com a palavra "teste"
-    tft.fillScreen(ST7735_WHITE); // Preencher a tela com branco
-    tft.setTextColor(ST7735_BLACK); // Definir a cor do texto como preto
-    tft.setTextSize(2); // Definir o tamanho do texto
-    tft.setCursor(30, 70); // Definir a posição do cursor
-    tft.print("teste"); // Exibir o texto "teste"
+  tft.initR(INITR_BLACKTAB);
+  tft.setRotation(2);
+  delay(1500);
+  tft.fillScreen(ST7735_BLACK);
+
+  pinMode(LED_PIN, OUTPUT);
+  analogWrite(LED_PIN, brilho);
+
+  // Desenha a imagem de fundo
+  int h = 160, w = 128, row, col, buffidx = 0;
+  for (row = 0; row < h; row++) {
+    for (col = 0; col < w; col++) {
+      if (tema == true) {
+        tft.drawPixel(col, row, pgm_read_word(splash_screen_black + buffidx));
+        buffidx++;
+      } else {
+        tft.drawPixel(col, row, pgm_read_word(splash_screen_white + buffidx));
+        buffidx++;
+
+      }
+    }
+  }
+  delay(2000);
+
+  // Exibir tela branca com a palavra "teste"
+  tft.fillScreen(ST7735_WHITE);
+  
+  if (tema == true) {
+        tft.fillScreen(ST7735_BLACK);
+        tft.setTextColor(ST7735_WHITE);
+      } else {
+       tft.fillScreen(ST7735_WHITE); 
+       tft.setTextColor(ST7735_BLACK);
+      }
+  tft.setTextSize(2);
+  tft.setCursor(30, 70);
+  tft.print("teste");
 }
 
 void loop() {
-    // Nenhuma ação no loop
+  server.handleClient();
 }
