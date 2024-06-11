@@ -29,27 +29,6 @@ WebServer server(80);
 bool tema;
 int brilho;
 
-void handleReceberDados() {
-  if (server.hasArg("plain")) {
-    String dados = server.arg("plain");
-    Serial.println(dados);
-
-    DynamicJsonDocument doc(1024);
-    deserializeJson(doc, dados);
-    bool novoTema = doc["temaJSON"];
-    int novoBrilho = doc["brilhoJSON"];
-
-    // Verifica se os valores recebidos são diferentes dos valores atuais
-    if (novoTema != tema || novoBrilho != brilho) {
-      gravarValores(novoTema, novoBrilho);
-    }
-
-    server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
-  } else {
-    server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   WiFiManager wifiManager;
@@ -92,10 +71,24 @@ void setup() {
 
   tft.initR(INITR_BLACKTAB);
   tft.setRotation(2);
-  delay(1500);
+  delay(500);
   tft.fillScreen(ST7735_BLACK);
 
   pinMode(LED_PIN, OUTPUT);
+  inicializaDisplay();
+}
+
+void loop() {
+  server.handleClient();
+  
+
+}
+
+
+
+
+
+void inicializaDisplay() {
   analogWrite(LED_PIN, brilho);
 
   int h = 160, w = 128, row, col, buffidx = 0;
@@ -124,11 +117,9 @@ void setup() {
   tft.print("teste");
 }
 
-void loop() {
-  server.handleClient();
-  
 
-}
+
+
 
 void gravarValores(bool novoTema, int novoBrilho) {
   // Grava o novo valor do tema se for diferente do atual
@@ -141,6 +132,7 @@ void gravarValores(bool novoTema, int novoBrilho) {
   if (novoBrilho != brilho) {
     EEPROM.write(startAddress + enderecoBrilho, novoBrilho);
     brilho = novoBrilho;
+  
   }
 
   // Incrementa o contador de escritas
@@ -153,3 +145,29 @@ void gravarValores(bool novoTema, int novoBrilho) {
   // Salva as alterações na EEPROM
   EEPROM.commit();
 }
+
+
+
+
+void handleReceberDados() {
+  if (server.hasArg("plain")) {
+    String dados = server.arg("plain");
+    Serial.println(dados);
+
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, dados);
+    bool novoTema = doc["temaJSON"];
+    int novoBrilho = doc["brilhoJSON"];
+
+    // Verifica se os valores recebidos são diferentes dos valores atuais
+    if (novoTema != tema || novoBrilho != brilho) {
+      gravarValores(novoTema, novoBrilho);
+      inicializaDisplay();
+    }
+
+    server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
+  } else {
+    server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
+  }
+}
+
