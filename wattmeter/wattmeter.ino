@@ -15,7 +15,7 @@
 
 // Definições para o wear leveling da EEPROM
 const int EEPROM_SIZE = 512;  // Tamanho da EEPROM a ser usado
-const int MAX_WRITES = 10000; // Número máximo de escritas
+const int MAX_WRITES = 10; // Número máximo de escritas
 int startAddress = 0;         // Endereço inicial para o wear leveling
 int writeCounts = 0;          // Contador de escritas
 
