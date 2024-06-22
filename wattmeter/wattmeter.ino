@@ -8,6 +8,7 @@
 #include <EEPROM.h>
 #include "screens.h"
 
+
 #define TFT_CS    10
 #define TFT_RST   5
 #define TFT_DC    6
@@ -28,6 +29,41 @@ WebServer server(80);
 
 bool tema;
 int brilho;
+float Voltage = 227;
+float Current = 9;
+float Power = Voltage * Current;
+float ValueInReal = 0.85;
+float ValueTotal = Power /1000 * ValueInReal;
+float Frequency = 0;
+bool PowerLimitDisplay = 0;
+float ValuePowerLimit = false;
+
+uint16_t DarkColors [8] = {
+  ST7735_WHITE,
+  ST7735_MAGENTA,
+  ST7735_RED,
+  ST7735_YELLOW,
+  ST7735_GREEN,
+  ST7735_WHITE,
+  ST7735_WHITE,
+  ST7735_GREEN
+};
+
+uint16_t LightColors [8] = {
+  ST7735_BLACK,
+  ST7735_BLUE,
+  ST7735_RED,
+  ST7735_ORANGE,
+  ST7735_GREEN,
+  ST7735_BLACK,
+  ST7735_BLACK,
+  ST7735_GREEN
+};
+
+int FontSize [8] = {1, 1, 1, 1, 1, 2, 1, 1};
+
+int X [8] = {17, 5, 78, 5, 78, 10, 17, 97};
+int Y [8] = {1, 26, 26, 53, 53, 80, 115, 115};
 
 void setup() {
   Serial.begin(115200);
@@ -80,7 +116,7 @@ void setup() {
 
 void loop() {
   server.handleClient();
-  
+  FillScreen();
 
 }
 
@@ -112,9 +148,6 @@ void inicializaDisplay() {
     tft.setTextColor(ST7735_BLACK);
   }
 
-  tft.setTextSize(2);
-  tft.setCursor(30, 70);
-  tft.print("teste");
 }
 
 
@@ -159,7 +192,7 @@ void handleReceberDados() {
     bool novoTema = doc["temaJSON"];
     int novoBrilho = doc["brilhoJSON"];
 
-    // Verifica se os valores recebidos são diferentes dos valores atuais
+    
     if (novoTema != tema || novoBrilho != brilho) {
       gravarValores(novoTema, novoBrilho);
       inicializaDisplay();
@@ -168,6 +201,65 @@ void handleReceberDados() {
     server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
   } else {
     server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
+  }
+}
+
+void FillScreen() {
+  for (int i = 0; i < 8; i++) {
+    if (tema == true) {
+      tft.setTextColor(DarkColors[i]);
+    } else {
+      tft.setTextColor(LightColors[i]);
+    }
+    tft.setTextSize(FontSize[i]);
+    tft.setCursor(X[i], Y[i]);
+    switch (i) {
+      case 0:
+        tft.println("Versao de testes");
+        break;
+      case 1:
+        tft.println(String(Voltage, 1) + "V");
+        break;
+      case 2:
+        if (Current < 11) {
+          tft.println(String(Current, 3) + "A");
+        } else if ( Current > 10){
+          tft.println(String(Current, 2) + "A");
+        }
+        break;
+     case 3:
+        if (Power < 11) {
+          tft.println(String(Power, 2) + "W");
+        } else if ( Power > 10){
+          tft.println(String(Power, 1) + "W");
+        } else if (Power > 100){
+          tft.println(String(Power, 0) + "W");
+        } else if (Power > 1000){
+          tft.println(String(Power / 1000, 2) + "Kw");
+        }
+        break;
+     case 4:
+        tft.println(String(Frequency, 1) + "Hz");
+        break;
+     case 5:
+         if (ValueTotal < 11) {
+          tft.println(String(ValueTotal, 2) + "R$/h");
+        } else if ( Power > 10){
+          tft.println(String(ValueTotal, 1) + "R$/h");
+        } 
+        break;
+     case 6:
+        tft.println("Limite de C.");
+        break;
+    case 7:
+        if (PowerLimitDisplay == true)
+          tft.println("ON");
+        else {
+          tft.setTextColor(ST7735_RED);
+          tft.println("OFF");
+        }
+        break;
+    }
   }
 }
 
