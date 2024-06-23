@@ -7,6 +7,7 @@
 #include <Adafruit_ST7735.h>
 #include <EEPROM.h>
 #include "screens.h"
+#include <Adafruit_ADS1X15.h> // lib para converter os dados do ADS1115
 
 
 #define TFT_CS    10
@@ -25,19 +26,21 @@ const int enderecoTema = 0;   // Endereço para a variável 'tema'
 const int enderecoBrilho = 4; // Endereço para a variável 'brilho'
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
+Adafruit_ADS1115 ads; 
 WebServer server(80);
 
 bool tema;
 int brilho;
-float Voltage = 227;
-float Current = 9;
+float Voltage = 127;
+float Current = 0;
 float Power = Voltage * Current;
 float ValueInReal = 0.85;
 float ValueTotal = Power /1000 * ValueInReal;
 float Frequency = 0;
 bool PowerLimitDisplay = 0;
 float ValuePowerLimit = false;
-
+uint16_t Color;
+float SomaCorrente = 0;
 uint16_t DarkColors [8] = {
   ST7735_WHITE,
   ST7735_MAGENTA,
@@ -112,21 +115,51 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
   inicializaDisplay();
+
+  ads.setGain(GAIN_TWOTHIRDS);
+  if (!ads.begin())
+  {
+    Serial.println("Failed to initialize ADS.");
+    while (1);
+ }
 }
 
 void loop() {
   server.handleClient();
+  
   FillScreen();
+  ReadCurrent();
 
 }
 
 
+void ReadCurrent() {
+  int16_t tensao_serial, corrente_serial;  // Retorna o valor em serial
+  float tensao_volts, corrente_volts;  // Retorna o valor em Volts
 
+  SomaCorrente = 0;  // Limpa a soma das correntes antes de cada medição
+
+  for (int i = 0; i < 100; i++) {
+    corrente_serial = ads.readADC_SingleEnded(1);
+    corrente_volts = ads.computeVolts(corrente_serial); // Leia o valor do canal 1 do ADS1115
+    SomaCorrente += pow((corrente_volts - 2.5)/0.1, 2);  // Ajusta o valor (offset de 0 para 16 bits) e eleva ao quadrado
+    delay(10);  // Atraso de 10ms entre as leituras // Atraso de 250ms entre as leituras
+    Serial.println(corrente_volts);
+    Serial.println(SomaCorrente);
+  }
+
+  tensao_serial = ads.readADC_SingleEnded(3);  // Leia o valor do canal 3 do ADS1115
+  tensao_volts = ads.computeVolts(tensao_serial);  // Converte o valor lido em volts
+ 
+  Current = sqrt(SomaCorrente / 100);  // Calcula a média quadrática
+  SomaCorrente = 0;
+  Serial.println(Current);
+  delay(100);  // Atraso adicional de 250ms antes de reiniciar a soma das correntes
+}
 
 
 void inicializaDisplay() {
   analogWrite(LED_PIN, brilho);
-
   int h = 160, w = 128, row, col, buffidx = 0;
   for (row = 0; row < h; row++) {
     for (col = 0; col < w; col++) {
@@ -141,11 +174,11 @@ void inicializaDisplay() {
   delay(2000);
 
   if (tema == true) {
+    Color = ST7735_BLACK;
     tft.fillScreen(ST7735_BLACK);
-    tft.setTextColor(ST7735_WHITE);
   } else {
+    Color = ST7735_WHITE;
     tft.fillScreen(ST7735_WHITE);
-    tft.setTextColor(ST7735_BLACK);
   }
 
 }
@@ -182,6 +215,7 @@ void gravarValores(bool novoTema, int novoBrilho) {
 
 
 
+
 void handleReceberDados() {
   if (server.hasArg("plain")) {
     String dados = server.arg("plain");
@@ -204,6 +238,8 @@ void handleReceberDados() {
   }
 }
 
+
+
 void FillScreen() {
   for (int i = 0; i < 8; i++) {
     if (tema == true) {
@@ -218,16 +254,19 @@ void FillScreen() {
         tft.println("Versao de testes");
         break;
       case 1:
+        tft.fillRect(X[i], Y[i], 30, 10, Color);
         tft.println(String(Voltage, 1) + "V");
         break;
       case 2:
+        tft.fillRect(X[i], Y[i], 30, 10, Color);
         if (Current < 11) {
           tft.println(String(Current, 3) + "A");
         } else if ( Current > 10){
           tft.println(String(Current, 2) + "A");
         }
         break;
-     case 3:
+      case 3:
+        tft.fillRect(X[i], Y[i], 30, 10, Color);
         if (Power < 11) {
           tft.println(String(Power, 2) + "W");
         } else if ( Power > 10){
@@ -238,20 +277,23 @@ void FillScreen() {
           tft.println(String(Power / 1000, 2) + "Kw");
         }
         break;
-     case 4:
+      case 4:
+        tft.fillRect(X[i], Y[i], 30, 10, Color);
         tft.println(String(Frequency, 1) + "Hz");
         break;
-     case 5:
+      case 5:
+        tft.fillRect(X[i], Y[i], 80, 20, Color);
          if (ValueTotal < 11) {
           tft.println(String(ValueTotal, 2) + "R$/h");
         } else if ( Power > 10){
           tft.println(String(ValueTotal, 1) + "R$/h");
         } 
         break;
-     case 6:
+      case 6:
         tft.println("Limite de C.");
         break;
-    case 7:
+      case 7:
+        tft.fillRect(X[i], Y[i], 30, 10, Color);
         if (PowerLimitDisplay == true)
           tft.println("ON");
         else {
