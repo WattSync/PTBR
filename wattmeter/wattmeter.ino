@@ -1,19 +1,30 @@
-#include <WiFi.h>
+/*#include <WiFi.h>
 #include <WiFiManager.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
-#include <ESPmDNS.h>
+#include <ESPmDNS.h>*/
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
 #include <EEPROM.h>
 #include "screens.h"
 #include <Adafruit_ADS1X15.h> // lib para converter os dados do ADS1115
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 
-
+#define RELAY_PIN 13
+#define BUZZER_PIN 7
 #define TFT_CS    10
 #define TFT_RST   5
 #define TFT_DC    6
 #define LED_PIN   15
+
+// UUIDs para o serviço e características
+#define SERVICE_UUID           "91bad492-b950-4226-aa2b-4ede9fa42f59"
+#define CHARACTERISTIC_UUID_1  "cba1d466-344c-4be3-ab3f-189f80dd7518"
+#define CHARACTERISTIC_UUID_2  "cba1d466-344c-4be3-ab3f-189f80dd7519"
+#define CHARACTERISTIC_UUID_3  "cba1d466-344c-4be3-ab3f-189f80dd7520"
+
 
 // Definições para o wear leveling da EEPROM
 const int EEPROM_SIZE = 512;  // Tamanho da EEPROM a ser usado
@@ -27,20 +38,21 @@ const int enderecoBrilho = 4; // Endereço para a variável 'brilho'
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 Adafruit_ADS1115 ads; 
-WebServer server(80);
+//WebServer server(80);
 
 bool tema;
 int brilho;
-float Voltage = 127;
-float Current = 0;
+float Voltage = 127.5;
+float Current = 9.65;
 float Power = Voltage * Current;
 float ValueInReal = 0.85;
 float ValueTotal = Power /1000 * ValueInReal;
-float Frequency = 0;
+float Frequency = 60;
 bool PowerLimitDisplay = 0;
 float ValuePowerLimit = false;
 uint16_t Color;
 float SomaCorrente = 0;
+int estado = 0;
 uint16_t DarkColors [8] = {
   ST7735_WHITE,
   ST7735_MAGENTA,
@@ -68,9 +80,29 @@ int FontSize [8] = {1, 1, 1, 1, 1, 2, 1, 1};
 int X [8] = {17, 5, 78, 5, 78, 10, 17, 97};
 int Y [8] = {1, 26, 26, 53, 53, 80, 115, 115};
 
+class MyCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+    if (value.length() > 0) {
+      // Converte a string recebida para o tipo correspondente e armazena nas variáveis
+      if (pCharacteristic->getUUID().equals(BLEUUID(CHARACTERISTIC_UUID_1))) {
+        tema = (value == "1");
+      } else if (pCharacteristic->getUUID().equals(BLEUUID(CHARACTERISTIC_UUID_2))) {
+        brilho = atoi(value.c_str());
+      } else if (pCharacteristic->getUUID().equals(BLEUUID(CHARACTERISTIC_UUID_3))) {
+        estado = atoi(value.c_str());
+      }
+    }
+  }
+};
 void setup() {
   Serial.begin(115200);
-  WiFiManager wifiManager;
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+
+  // Inicialmente desativa o relé
+  digitalWrite(RELAY_PIN, LOW);
+  /*WiFiManager wifiManager;
   wifiManager.autoConnect("LedPwm");
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -88,7 +120,7 @@ void setup() {
   } else {
     Serial.println("Não foi possível conectar ao Wi-Fi.");
   }
-
+*/
   EEPROM.begin(EEPROM_SIZE);
 
   // Lê o contador de escritas e o endereço inicial da última posição da EEPROM
@@ -116,48 +148,131 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   inicializaDisplay();
 
-  ads.setGain(GAIN_TWOTHIRDS);
-  if (!ads.begin())
+  //ads.setGain(GAIN_TWOTHIRDS);
+  /*if (!ads.begin())
   {
     Serial.println("Failed to initialize ADS.");
     while (1);
- }
+ }*/
+  BLEDevice::init("ESP32_BLE_Server");
+  BLEServer *pServer = BLEDevice::createServer();
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  BLECharacteristic *pCharacteristic1 = pService->createCharacteristic(
+                                         CHARACTERISTIC_UUID_1,
+                                         BLECharacteristic::PROPERTY_WRITE
+                                       );
+  pCharacteristic1->setCallbacks(new MyCallbacks());
+
+  BLECharacteristic *pCharacteristic2 = pService->createCharacteristic(
+                                         CHARACTERISTIC_UUID_2,
+                                         BLECharacteristic::PROPERTY_WRITE
+                                       );
+  pCharacteristic2->setCallbacks(new MyCallbacks());
+
+  BLECharacteristic *pCharacteristic3 = pService->createCharacteristic(
+                                         CHARACTERISTIC_UUID_3,
+                                         BLECharacteristic::PROPERTY_WRITE
+                                       );
+  pCharacteristic3->setCallbacks(new MyCallbacks());
+
+  pService->start();
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);  // funções opcionais, mas recomendadas
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+  Serial.println("Characteristic defined! Now you can read it in your phone!");
+}
+
+
 }
 
 void loop() {
-  server.handleClient();
-  
+  //server.handleClient();
+  if (estado == 0){
   FillScreen();
-  ReadCurrent();
-
+  delay(5000);
+  //ReadCurrent();
+  digitalWrite(RELAY_PIN, HIGH);
+  }
+  if (estado ==1){
+    VoltageAlert();
+    digitalWrite(RELAY_PIN, LOW);
+    tone(BUZZER_PIN, 700);
+    delay(10000);
+  }
+  if (estado ==2){
+    CurrentAlert();
+    digitalWrite(RELAY_PIN, LOW);
+    tone(BUZZER_PIN, 700);
+    delay(10000);
+  }
 }
 
+void VoltageAlert() {
+  analogWrite(LED_PIN, brilho);
+  int h = 160, w = 128, row, col, buffidx = 0;
+  for (row = 0; row < h; row++) {
+    for (col = 0; col < w; col++) {
+      if (tema == true) {
+         tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx));
+        } else {
+          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx));
+        }
+        buffidx++;
+    }
+	tft.setCursor(22,115);
+  tft.println("Tensao anormal");
+  tft.setCursor(20,135);
+  tft.println("Saida desligada");
+  }
+}
+void CurrentAlert() {
+  analogWrite(LED_PIN, brilho);
+  int h = 160, w = 128, row, col, buffidx = 0;
+  for (row = 0; row < h; row++) {
+    for (col = 0; col < w; col++) {
+      if (tema == true) {
+         tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx));
+        } else {
+          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx));
+        }
+        buffidx++;
+    }
+	tft.setCursor(15,115);
+  tft.println("Corrente excedida");
+  tft.setCursor(20,135);
+  tft.println("Saida desligada");
+  }
+}
 
-void ReadCurrent() {
+/*void ReadCurrent() {
   int16_t tensao_serial, corrente_serial;  // Retorna o valor em serial
   float tensao_volts, corrente_volts;  // Retorna o valor em Volts
 
   SomaCorrente = 0;  // Limpa a soma das correntes antes de cada medição
 
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 60; i++) {
     corrente_serial = ads.readADC_SingleEnded(1);
-    corrente_volts = ads.computeVolts(corrente_serial); // Leia o valor do canal 1 do ADS1115
-    SomaCorrente += pow((corrente_volts - 2.5)/0.1, 2);  // Ajusta o valor (offset de 0 para 16 bits) e eleva ao quadrado
+    corrente_volts = (corrente_serial - 13670)* 0.1875/1000; // Leia o valor do canal 1 do ADS1115
+    SomaCorrente += pow(corrente_volts, 2);  // Ajusta o valor (offset de 0 para 16 bits) e eleva ao quadrado
     delay(10);  // Atraso de 10ms entre as leituras // Atraso de 250ms entre as leituras
     Serial.println(corrente_volts);
-    Serial.println(SomaCorrente);
+    Serial.println(corrente_serial);
   }
 
   tensao_serial = ads.readADC_SingleEnded(3);  // Leia o valor do canal 3 do ADS1115
   tensao_volts = ads.computeVolts(tensao_serial);  // Converte o valor lido em volts
  
-  Current = sqrt(SomaCorrente / 100);  // Calcula a média quadrática
+  Current = sqrt(SomaCorrente / 60)/0,1;  // Calcula a média quadrática
   SomaCorrente = 0;
   Serial.println(Current);
   delay(100);  // Atraso adicional de 250ms antes de reiniciar a soma das correntes
 }
 
-
+*/
 void inicializaDisplay() {
   analogWrite(LED_PIN, brilho);
   int h = 160, w = 128, row, col, buffidx = 0;
@@ -215,7 +330,7 @@ void gravarValores(bool novoTema, int novoBrilho) {
 
 
 
-
+/*
 void handleReceberDados() {
   if (server.hasArg("plain")) {
     String dados = server.arg("plain");
@@ -239,9 +354,10 @@ void handleReceberDados() {
 }
 
 
-
+*/
 void FillScreen() {
   for (int i = 0; i < 8; i++) {
+    
     if (tema == true) {
       tft.setTextColor(DarkColors[i]);
     } else {
@@ -302,6 +418,7 @@ void FillScreen() {
         }
         break;
     }
+    
   }
 }
 
