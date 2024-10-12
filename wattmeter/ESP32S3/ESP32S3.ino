@@ -7,18 +7,15 @@
 #include <Adafruit_ST7735.h>
 #include <EEPROM.h>
 #include "screens.h"
-//#include <Adafruit_ADS1X15.h> // lib para converter os dados do ADS1115
+#include "HardwareSerial.h"
 
 
-#define RELAY_PIN 13
-#define BUZZER_PIN 7
-#define TFT_CS    10
-#define TFT_RST   5
-#define TFT_DC    6
-#define LED_PIN   15
-
-
-
+#define BUZZER_PIN  17
+#define TFT_CS      10
+#define TFT_RST     5
+#define TFT_DC      6
+#define TX_PIN      40
+#define RX_PIN      47
 
 // Definições para o wear leveling da EEPROM
 const int EEPROM_SIZE = 512;  // Tamanho da EEPROM a ser usado
@@ -31,22 +28,17 @@ const int enderecoTema = 0;   // Endereço para a variável 'tema'
 const int enderecoBrilho = 4; // Endereço para a variável 'brilho'
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
-//Adafruit_ADS1115 ads; 
-WebServer server(80);
 
-bool tema;
-int brilho;
-float Voltage = 127.5;
-float Current = 9.65;
+WebServer server(80); // 80 é a porta padrão para HTTP
+HardwareSerial mySerial(1); // UART1
+
+float Voltage, Current, ValueInReal, Frequency, ValuePowerLimit = 0;
 float Power = Voltage * Current;
-float ValueInReal = 0.85;
 float ValueTotal = Power /1000 * ValueInReal;
-float Frequency = 60;
-bool PowerLimitDisplay = 0;
-float ValuePowerLimit = false;
+bool PowerLimitDisplay, Wire_1, Wire_2, estado, ON = 0;
+bool tema = false;
 uint16_t Color;
-float SomaCorrente = 0;
-int estado = 0;
+
 uint16_t DarkColors [8] = {
   ST7735_WHITE,
   ST7735_MAGENTA,
@@ -77,14 +69,32 @@ int Y [8] = {1, 26, 26, 53, 53, 80, 115, 115};
 
 void setup() {
   Serial.begin(115200);
+  mySerial.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
   pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(RELAY_PIN, OUTPUT);
 
-  // Inicialmente desativa o relé
-  digitalWrite(RELAY_PIN, LOW);
   WiFiManager wifiManager;
+  wifiManager.setTitle("Conecte-se ao dispositivo");
+  wifiManager.setHostname("WattSync");
+
+  // Remover "Info" e "Update" do menu
+  std::vector<const char *> customMenu = {"wifi", "exit"}; // Apenas mostrar Wi-Fi e Sair
+  wifiManager.setMenu(customMenu);
+
+  wifiManager.setCustomHeadElement(
+    "<style>"
+    "button {"
+    "  border-radius: 15px;"  // Arredondar botões
+    "  padding: 10px 20px;"
+    "  background-color: #800080;"  // Cor de fundo roxa
+    "  color: white;"
+    "  border: none;"
+    "}"
+    "</style>"
+  );
+
   wifiManager.autoConnect("WattSync");
 
+  wifiManager.autoConnect("WattSync");
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Conectado ao Wi-Fi.");
     Serial.println(WiFi.localIP());
@@ -96,6 +106,7 @@ void setup() {
     }
 
     server.on("/receber-dados", HTTP_POST, handleReceberDados);
+    server.on("/enviar-dados", HTTP_GET, handleEnviarDados); 
     server.begin();
   } else {
     Serial.println("Não foi possível conectar ao Wi-Fi.");
@@ -118,43 +129,32 @@ void setup() {
 
   // Lê os valores da EEPROM
   tema = EEPROM.read(startAddress + enderecoTema);
-  brilho = EEPROM.read(startAddress + enderecoBrilho);
 
   tft.initR(INITR_BLACKTAB);
   tft.setRotation(2);
   delay(500);
   tft.fillScreen(ST7735_BLACK);
 
-  pinMode(LED_PIN, OUTPUT);
   inicializaDisplay();
 
-  //ads.setGain(GAIN_TWOTHIRDS);
-  /*if (!ads.begin())
-  {
-    Serial.println("Failed to initialize ADS.");
-    while (1);
- }*/
-  
 }
 
 void loop() {
   server.handleClient();
+  ReciverData();
   if (estado == 0){
     digitalWrite(BUZZER_PIN, LOW);
     FillScreen();
-    delay(2000);
-  //ReadCurrent();
-    digitalWrite(RELAY_PIN, HIGH);
+    delay(20000000);
+    
   }
   if (estado ==1){
     VoltageAlert();
-    digitalWrite(RELAY_PIN, LOW);
     tone(BUZZER_PIN, 900);
     delay(1000);
   }
   if (estado ==2){
     CurrentAlert();
-    digitalWrite(RELAY_PIN, LOW);
     tone(BUZZER_PIN, 700);
     delay(1000);
   }
@@ -162,7 +162,6 @@ void loop() {
 
 void VoltageAlert() {
   uint16_t ColorText;
-  analogWrite(LED_PIN, brilho);
   int h = 160, w = 128, row, col, buffidx = 0;
   for (row = 0; row < h; row++) {
     for (col = 0; col < w; col++) {
@@ -184,7 +183,6 @@ void VoltageAlert() {
 }
 void CurrentAlert() {
   uint16_t ColorText;
-  analogWrite(LED_PIN, brilho);
   int h = 160, w = 128, row, col, buffidx = 0;
   for (row = 0; row < h; row++) {
     for (col = 0; col < w; col++) {
@@ -205,33 +203,8 @@ void CurrentAlert() {
   }
 }
 
-/*void ReadCurrent() {
-  int16_t tensao_serial, corrente_serial;  // Retorna o valor em serial
-  float tensao_volts, corrente_volts;  // Retorna o valor em Volts
 
-  SomaCorrente = 0;  // Limpa a soma das correntes antes de cada medição
-
-  for (int i = 0; i < 60; i++) {
-    corrente_serial = ads.readADC_SingleEnded(1);
-    corrente_volts = (corrente_serial - 13670)* 0.1875/1000; // Leia o valor do canal 1 do ADS1115
-    SomaCorrente += pow(corrente_volts, 2);  // Ajusta o valor (offset de 0 para 16 bits) e eleva ao quadrado
-    delay(10);  // Atraso de 10ms entre as leituras // Atraso de 250ms entre as leituras
-    Serial.println(corrente_volts);
-    Serial.println(corrente_serial);
-  }
-
-  tensao_serial = ads.readADC_SingleEnded(3);  // Leia o valor do canal 3 do ADS1115
-  tensao_volts = ads.computeVolts(tensao_serial);  // Converte o valor lido em volts
- 
-  Current = sqrt(SomaCorrente / 60)/0,1;  // Calcula a média quadrática
-  SomaCorrente = 0;
-  Serial.println(Current);
-  delay(100);  // Atraso adicional de 250ms antes de reiniciar a soma das correntes
-}
-
-*/
 void inicializaDisplay() {
-  analogWrite(LED_PIN, brilho);
   int h = 160, w = 128, row, col, buffidx = 0;
   for (row = 0; row < h; row++) {
     for (col = 0; col < w; col++) {
@@ -258,34 +231,20 @@ void inicializaDisplay() {
 
 
 
-void gravarValores(bool novoTema, int novoBrilho) {
+void gravarValores(bool novoTema) {
   // Grava o novo valor do tema se for diferente do atual
   if (novoTema != tema) {
     EEPROM.write(startAddress + enderecoTema, novoTema);
     tema = novoTema;
   }
-
-  // Grava o novo valor do brilho se for diferente do atual
-  if (novoBrilho != brilho) {
-    EEPROM.write(startAddress + enderecoBrilho, novoBrilho);
-    brilho = novoBrilho;
-  
-  }
-
   // Incrementa o contador de escritas
   writeCounts++;
-
   // Atualiza o contador de escritas e o endereço inicial na EEPROM
   EEPROM.write(EEPROM_SIZE - 4, startAddress);
   EEPROM.write(EEPROM_SIZE - 2, writeCounts);
-
   // Salva as alterações na EEPROM
   EEPROM.commit();
 }
-
-
-
-
 
 void handleReceberDados() {
   if (server.hasArg("plain")) {
@@ -295,11 +254,10 @@ void handleReceberDados() {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, dados);
     bool novoTema = doc["temaJSON"];
-    int novoBrilho = doc["brilhoJSON"];
     estado = doc["estadoJSON"];
     PowerLimitDisplay = doc["LimiteJSON"];
-    if (novoTema != tema || novoBrilho != brilho) {
-      gravarValores(novoTema, novoBrilho);
+    if (novoTema != tema ) {
+      gravarValores(novoTema);
       inicializaDisplay();
     }
 
@@ -309,11 +267,25 @@ void handleReceberDados() {
   }
 }
 
-
+void handleEnviarDados() {
+  // Criar um objeto JSON para enviar os dados
+  DynamicJsonDocument doc(1024);
+  doc["tensao"] = Voltage;
+  doc["corrente"] = Current;
+  doc["frequencia"] = Frequency;
+  doc["ligado"] = ON;
+  doc["Fio1"] = Wire_1;
+  doc["Fio2"] = Wire_2;
+  String response;
+  serializeJson(doc, response);
+  
+  server.send(200, "application/json", response);
+}
 
 void FillScreen() {
   tft.fillScreen(Color);
   for (int i = 0; i < 8; i++) {
+    delay(250);
     if (tema == true) {
       tft.setTextColor(DarkColors[i]);
     } else {
@@ -378,3 +350,27 @@ void FillScreen() {
   }
 }
 
+void ReciverData(){
+  if (mySerial.available()) {
+    // Ler a mensagem completa até encontrar um \n (tempo enviado)
+    String receivedMessage = mySerial.readStringUntil('\n');
+
+    // Separar os números usando a vírgula como delimitador
+    int index = 0;
+    char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
+
+    while (token != nullptr) {
+      if (index == 0) {
+        Voltage = atof(token); // Alterar para atof para ler float
+      } else if (index == 1) {
+        Current = atof(token);
+      } else if (index == 2) {
+        Frequency = atof(token);
+      } else if (index == 3) {
+        ON = atoi(token);
+      }
+      token = strtok(nullptr, ",");
+      index++;
+    }
+  }
+}
