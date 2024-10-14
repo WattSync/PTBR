@@ -35,7 +35,8 @@ HardwareSerial mySerial(1); // UART1
 float Voltage, Current, ValueInReal, Frequency, ValuePowerLimit = 0;
 float Power = Voltage * Current;
 float ValueTotal = Power /1000 * ValueInReal;
-bool PowerLimitDisplay, Wire_1, Wire_2, estado, ON = 0;
+bool PowerLimitDisplay, Wire_1, Wire_2, ON = 0;
+int error = 0;
 bool tema = false;
 uint16_t Color;
 
@@ -142,18 +143,18 @@ void setup() {
 void loop() {
   server.handleClient();
   ReciverData();
-  if (estado == 0){
+  if (error == 0){
     digitalWrite(BUZZER_PIN, LOW);
     FillScreen();
     delay(20000000);
     
   }
-  if (estado ==1){
+  if (error ==1){
     VoltageAlert();
     tone(BUZZER_PIN, 900);
     delay(1000);
   }
-  if (estado ==2){
+  if (error ==2){
     CurrentAlert();
     tone(BUZZER_PIN, 700);
     delay(1000);
@@ -254,7 +255,7 @@ void handleReceberDados() {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, dados);
     bool novoTema = doc["temaJSON"];
-    estado = doc["estadoJSON"];
+    error = doc["errorJSON"];
     PowerLimitDisplay = doc["LimiteJSON"];
     if (novoTema != tema ) {
       gravarValores(novoTema);
@@ -350,27 +351,34 @@ void FillScreen() {
   }
 }
 
-void ReciverData(){
-  if (mySerial.available()) {
-    // Ler a mensagem completa até encontrar um \n (tempo enviado)
-    String receivedMessage = mySerial.readStringUntil('\n');
-
-    // Separar os números usando a vírgula como delimitador
-    int index = 0;
-    char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
-
-    while (token != nullptr) {
-      if (index == 0) {
-        Voltage = atof(token); // Alterar para atof para ler float
-      } else if (index == 1) {
-        Current = atof(token);
-      } else if (index == 2) {
-        Frequency = atof(token);
-      } else if (index == 3) {
-        ON = atoi(token);
-      }
-      token = strtok(nullptr, ",");
-      index++;
+void ReciverData() {
+  pinMode(48, OUTPUT);
+  digitalWrite(48, HIGH);
+  while (!mySerial.available()) {
+    delay(10);
+  }
+  String receivedMessage = mySerial.readStringUntil('\n');
+  digitalWrite(48, LOW);
+  int index = 0;
+  char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
+  while (token != nullptr) {
+    if (index == 0) {
+      Voltage = atof(token); // Converter para float
+    } else if (index == 1) {
+      Current = atof(token);
+    } else if (index == 2) {
+      Frequency = atof(token);
+    } else if (index == 3) {
+      ON = atoi(token);
+    } else if (index == 4) {
+      Wire_1 = atoi(token);
+    } else if (index == 5) {
+      Wire_2 = atoi(token);
+    } else if (index == 6) {
+      error = atoi(token);
     }
+    token = strtok(nullptr, ",");
+    index++;
   }
 }
+
