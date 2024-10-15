@@ -9,13 +9,13 @@
 #include "screens.h"
 #include "HardwareSerial.h"
 
-
-#define BUZZER_PIN  17
-#define TFT_CS      10
-#define TFT_RST     5
-#define TFT_DC      6
-#define TX_PIN      40
-#define RX_PIN      47
+#define BUZZER_PIN      17
+#define TFT_CS          10
+#define TFT_RST         5
+#define TFT_DC          6
+#define TX_PIN          40
+#define RX_PIN          47
+#define TRANSMITTER_PIN 48
 
 // Definições para o wear leveling da EEPROM
 const int EEPROM_SIZE = 512;  // Tamanho da EEPROM a ser usado
@@ -38,6 +38,7 @@ float ValueTotal = Power /1000 * ValueInReal;
 bool PowerLimitDisplay, Wire_1, Wire_2, ON = 0;
 int error = 0;
 bool tema = false;
+bool alreadyExecuted = false;
 uint16_t Color;
 
 uint16_t DarkColors [8] = {
@@ -67,26 +68,38 @@ int FontSize [8] = {1, 1, 1, 1, 1, 2, 1, 1};
 int X [8] = {17, 5, 78, 5, 78, 10, 17, 97};
 int Y [8] = {1, 26, 26, 53, 53, 80, 115, 115};
 
+int tonee [4] = {494, 622, 740, 988};
+int delayy [4] = {200, 200, 200, 500};
 
 void setup() {
   Serial.begin(115200);
   mySerial.begin(115200, SERIAL_8N1, RX_PIN, TX_PIN);
   pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(TRANSMITTER_PIN, OUTPUT);
+
+  // Lê os valores da EEPROM
+  tema = EEPROM.read(startAddress + enderecoTema);
+
+  tft.initR(INITR_BLACKTAB);
+  tft.setRotation(2);
+  delay(500);
+  tft.fillScreen(ST7735_BLACK);
+
+  inicializaDisplay();
 
   WiFiManager wifiManager;
   wifiManager.setTitle("Conecte-se ao dispositivo");
   wifiManager.setHostname("WattSync");
 
-  // Remover "Info" e "Update" do menu
-  std::vector<const char *> customMenu = {"wifi", "exit"}; // Apenas mostrar Wi-Fi e Sair
+  std::vector<const char *> customMenu = {"wifi", "exit"}; 
   wifiManager.setMenu(customMenu);
 
   wifiManager.setCustomHeadElement(
     "<style>"
     "button {"
-    "  border-radius: 15px;"  // Arredondar botões
+    "  border-radius: 15px;" 
     "  padding: 10px 20px;"
-    "  background-color: #800080;"  // Cor de fundo roxa
+    "  background-color: #800080;" 
     "  color: white;"
     "  border: none;"
     "}"
@@ -128,26 +141,16 @@ void setup() {
     writeCounts = 0;
   }
 
-  // Lê os valores da EEPROM
-  tema = EEPROM.read(startAddress + enderecoTema);
-
-  tft.initR(INITR_BLACKTAB);
-  tft.setRotation(2);
-  delay(500);
-  tft.fillScreen(ST7735_BLACK);
-
-  inicializaDisplay();
-
+  
 }
 
 void loop() {
   server.handleClient();
   ReciverData();
-  if (error == 0){
+  while (error == 0){
     digitalWrite(BUZZER_PIN, LOW);
     FillScreen();
-    delay(20000000);
-    
+    alreadyExecuted = false;
   }
   if (error ==1){
     VoltageAlert();
@@ -161,55 +164,19 @@ void loop() {
   }
 }
 
-void VoltageAlert() {
-  uint16_t ColorText;
-  int h = 160, w = 128, row, col, buffidx = 0;
-  for (row = 0; row < h; row++) {
-    for (col = 0; col < w; col++) {
-      if (tema == true) {
-          ColorText = ST7735_WHITE;
-          tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx));
-         
-        } else {
-          ColorText = ST7735_BLACK;
-          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx));
-        }
-        buffidx++;
-    }
-	tft.setCursor(22,115);
-  tft.println("Tensao anormal");
-  tft.setCursor(20,135);
-  tft.println("Saida desligada");
-  }
-}
-void CurrentAlert() {
-  uint16_t ColorText;
-  int h = 160, w = 128, row, col, buffidx = 0;
-  for (row = 0; row < h; row++) {
-    for (col = 0; col < w; col++) {
-      if (tema == true) {
-         tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx));
-         ColorText = ST7735_WHITE;
-        } else {
-          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx));
-          ColorText = ST7735_BLACK;
-        }
-        buffidx++;
-    }
-  tft.setTextColor(ColorText);
-	tft.setCursor(15,115);
-  tft.println("Corrente excedida");
-  tft.setCursor(20,135);
-  tft.println("Saida desligada");
-  }
-}
 
 
 void inicializaDisplay() {
+  if (tema) {
+    Color = ST7735_BLACK;
+  } else {
+    Color = ST7735_WHITE;
+  }
+  tft.fillScreen(Color);
   int h = 160, w = 128, row, col, buffidx = 0;
   for (row = 0; row < h; row++) {
     for (col = 0; col < w; col++) {
-      if (tema == true) {
+      if (tema) {
         tft.drawPixel(col, row, pgm_read_word(splash_screen_black + buffidx));
       } else {
         tft.drawPixel(col, row, pgm_read_word(splash_screen_white + buffidx));
@@ -217,77 +184,55 @@ void inicializaDisplay() {
       buffidx++;
     }
   }
-  delay(2000);
+  for (int i = 0; i < 4; i++) {
+    tone(BUZZER_PIN, tonee[i]);
+    delay(delayy[i]);
+    noTone(BUZZER_PIN);
+  } 
 
-  if (tema == true) {
-    Color = ST7735_BLACK;
-  } else {
-    Color = ST7735_WHITE;
-  }
   tft.fillScreen(Color);
 
 }
 
 
 
-
-
-void gravarValores(bool novoTema) {
-  // Grava o novo valor do tema se for diferente do atual
-  if (novoTema != tema) {
-    EEPROM.write(startAddress + enderecoTema, novoTema);
-    tema = novoTema;
+void ReciverData() {
+  digitalWrite(TRANSMITTER_PIN, HIGH);
+  while (!mySerial.available()) {
+    delay(10);
   }
-  // Incrementa o contador de escritas
-  writeCounts++;
-  // Atualiza o contador de escritas e o endereço inicial na EEPROM
-  EEPROM.write(EEPROM_SIZE - 4, startAddress);
-  EEPROM.write(EEPROM_SIZE - 2, writeCounts);
-  // Salva as alterações na EEPROM
-  EEPROM.commit();
-}
-
-void handleReceberDados() {
-  if (server.hasArg("plain")) {
-    String dados = server.arg("plain");
-    Serial.println(dados);
-
-    DynamicJsonDocument doc(1024);
-    deserializeJson(doc, dados);
-    bool novoTema = doc["temaJSON"];
-    error = doc["errorJSON"];
-    PowerLimitDisplay = doc["LimiteJSON"];
-    if (novoTema != tema ) {
-      gravarValores(novoTema);
-      inicializaDisplay();
+  String receivedMessage = mySerial.readStringUntil('\n');
+  digitalWrite(TRANSMITTER_PIN, LOW);
+  int index = 0;
+  char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
+  while (token != nullptr) {
+    if (index == 0) {
+      Voltage = atof(token); 
+    } else if (index == 1) {
+      Current = atof(token);
+    } else if (index == 2) {
+      Frequency = atof(token);
+    } else if (index == 3) {
+      ON = atoi(token);
+    } else if (index == 4) {
+      Wire_1 = atoi(token);
+    } else if (index == 5) {
+      Wire_2 = atoi(token);
+    } else if (index == 6) {
+      error = atoi(token);
     }
-
-    server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
-  } else {
-    server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
+    token = strtok(nullptr, ",");
+    index++;
   }
 }
 
-void handleEnviarDados() {
-  // Criar um objeto JSON para enviar os dados
-  DynamicJsonDocument doc(1024);
-  doc["tensao"] = Voltage;
-  doc["corrente"] = Current;
-  doc["frequencia"] = Frequency;
-  doc["ligado"] = ON;
-  doc["Fio1"] = Wire_1;
-  doc["Fio2"] = Wire_2;
-  String response;
-  serializeJson(doc, response);
-  
-  server.send(200, "application/json", response);
-}
+
 
 void FillScreen() {
   tft.fillScreen(Color);
   for (int i = 0; i < 8; i++) {
     delay(250);
-    if (tema == true) {
+    if (tema) {
       tft.setTextColor(DarkColors[i]);
     } else {
       tft.setTextColor(LightColors[i]);
@@ -351,34 +296,120 @@ void FillScreen() {
   }
 }
 
-void ReciverData() {
-  pinMode(48, OUTPUT);
-  digitalWrite(48, HIGH);
-  while (!mySerial.available()) {
-    delay(10);
-  }
-  String receivedMessage = mySerial.readStringUntil('\n');
-  digitalWrite(48, LOW);
-  int index = 0;
-  char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
-  while (token != nullptr) {
-    if (index == 0) {
-      Voltage = atof(token); // Converter para float
-    } else if (index == 1) {
-      Current = atof(token);
-    } else if (index == 2) {
-      Frequency = atof(token);
-    } else if (index == 3) {
-      ON = atoi(token);
-    } else if (index == 4) {
-      Wire_1 = atoi(token);
-    } else if (index == 5) {
-      Wire_2 = atoi(token);
-    } else if (index == 6) {
-      error = atoi(token);
+
+
+void handleReceberDados() {
+  if (server.hasArg("plain")) {
+    String dados = server.arg("plain");
+    Serial.println(dados);
+
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, dados);
+    bool novoTema = doc["temaJSON"];
+    error = doc["errorJSON"];
+    PowerLimitDisplay = doc["LimiteJSON"];
+    if (novoTema != tema ) {
+      gravarValores(novoTema);
+      inicializaDisplay();
     }
-    token = strtok(nullptr, ",");
-    index++;
+
+    server.send(200, "application/json", "{\"status\":\"dados recebidos\"}");
+  } else {
+    server.send(400, "application/json", "{\"status\":\"erro ao receber dados\"}");
   }
 }
+
+
+
+void handleEnviarDados() {
+  // Criar um objeto JSON para enviar os dados
+  DynamicJsonDocument doc(1024);
+  doc["tensao"] = Voltage;
+  doc["corrente"] = Current;
+  doc["frequencia"] = Frequency;
+  doc["ligado"] = ON;
+  doc["Fio1"] = Wire_1;
+  doc["Fio2"] = Wire_2;
+  String response;
+  serializeJson(doc, response);
+  
+  server.send(200, "application/json", response);
+}
+
+
+
+void VoltageAlert() {
+  uint16_t ColorText;
+  int h = 160, w = 128, row, col, buffidx = 0;
+  if (!alreadyExecuted) {
+    for (row = 0; row < h; row++) {
+      for (col = 0; col < w; col++) {
+        if (tema) {
+          ColorText = ST7735_WHITE; // Tema claro
+          tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx)); 
+        } else {
+          ColorText = ST7735_BLACK; // Tema escuro
+          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx)); 
+        }
+      buffidx++;
+    }
+  }
+    tft.setTextColor(ColorText);
+    tft.setCursor(22, 115);
+    tft.println("Tensao anormal");
+    tft.setCursor(20, 135);
+    tft.println("Saida desligada");
+    
+    alreadyExecuted = true;  // Marcar que o código já foi executado
+  }
+
+}
+
+void CurrentAlert() {
+  uint16_t ColorText;
+  int h = 160, w = 128, row, col, buffidx = 0;
+  for (row = 0; row < h; row++) {
+    for (col = 0; col < w; col++) {
+      if (tema == true) {
+         tft.drawPixel(col, row, pgm_read_word(alert_black + buffidx));
+         ColorText = ST7735_WHITE;
+        } else {
+          tft.drawPixel(col, row, pgm_read_word(alert_white + buffidx));
+          ColorText = ST7735_BLACK;
+        }
+        buffidx++;
+    }
+  tft.setTextColor(ColorText);
+	tft.setCursor(15,115);
+  tft.println("Corrente excedida");
+  tft.setCursor(20,135);
+  tft.println("Saida desligada");
+  }
+}
+
+
+
+
+void gravarValores(bool novoTema) {
+  // Grava o novo valor do tema se for diferente do atual
+  if (novoTema != tema) {
+    EEPROM.write(startAddress + enderecoTema, novoTema);
+    tema = novoTema;
+  }
+  // Incrementa o contador de escritas
+  writeCounts++;
+  // Atualiza o contador de escritas e o endereço inicial na EEPROM
+  EEPROM.write(EEPROM_SIZE - 4, startAddress);
+  EEPROM.write(EEPROM_SIZE - 2, writeCounts);
+  // Salva as alterações na EEPROM
+  EEPROM.commit();
+}
+
+
+
+
+
+
+
+
 

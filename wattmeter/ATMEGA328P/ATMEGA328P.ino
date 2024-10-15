@@ -119,7 +119,7 @@ void loop() {
     }
 
     // Serial prints
-    Serial.print("Real RMS Voltage: ");
+    /*Serial.print("Real RMS Voltage: ");
     Serial.print(totalVoltageRMS, 3);
     Serial.println(" V");
 
@@ -145,12 +145,12 @@ void loop() {
 
     Serial.print("Power: ");
     Serial.print(totalVoltageRMS * currentRMS, 3);
-    Serial.println(" W");
+    Serial.println(" W");*/
 
     if (dataTransmitterVoltage >= 3.0) {
       String message = String(totalVoltageRMS) + "," + String(currentRMS) + "," + String(acFrequency) + "," + String(systemON) + "," + String(phaseWire1) + "," + String(phaseWire2) + "," + String(errorCode);
       mySerial.println(message);
-      Serial.println("Message sent to ESP32");
+      //Serial.println("Message sent to ESP32");
     }
 
     lastUpdateTime = currentTime;
