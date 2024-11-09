@@ -8,6 +8,7 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 ### Funcionalidades
 - Medição de corrente, tensão, potência e frequência com precisão.
 - Monitoramento remoto via aplicativo com conexão Wi-Fi.
+- Indentificação do tipo de rede elétrica.
 - Desligamento automático em caso de sobrecarga.
 - Desligamento automático em caso de subtensão ou sobretensão.
 - Aviso sonoro em caso de desligamento.
@@ -15,11 +16,11 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 - Display para a visualização dos dados no própio dispositivo.
 - Programação de horários para ligar e desligar os dispositivos.
 - Interface amigável para visualizar e interpretar dados de consumo.
-
+- Pode ser utilizado em todas as redes elétricas brasileiras.
 ## 🛠️ Tecnologias Utilizadas
 
 ### Hardware
-- **Microcontrolador:** ESP32S3 (WROOM 1) e ATmega328P.
+- **Microcontroladores:** ESP32S3 (WROOM 1) e ATmega328P.
 - **Sensores de Corrente e Tensão:** ACS712 30A e Divisor de Tensão.
 - **Componentes de Proteção:** Varistor 14D561K, Fusível de Queima Rápida de 25A e Diodo Zener 1N4733A.
 
@@ -51,6 +52,7 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
     ```
 
 3. Conecte o ESP32 ao computador e faça upload do código na pasta `ESP32S3` para o ESP32S3 usando a Arduino IDE.
+    Selecione a placa "ESP32S3 Dev Module", em outras variações pode não funcionar corretamente.
 
 4. Conecte o ATmega328P ao computador utilizando um gravador UART e faça upload do código na pasta `ATMEGA328P` usando a Arduino IDE.
 
@@ -73,16 +75,16 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 Desenvolvido por [Equipe WattSync](https://github.com/WattSync) para o Trabalho de Conclusão de Curso do Técnico em Desenvolvimento de Sistemas da ETEC Raposo Tavares.
 
 
-## 👷👷‍♀️ Membros da Equipe
+### 👷👷‍♀️ Membros da Equipe
 
-- [Beatriz// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software e das apresentações.
+- [Beatriz// ](https://www.linkedin.com/in/beatrizbernardess): Responsável pelo desenvolvimento do software e das apresentações.
 - [Bruno// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do website.
-- [Camila Lourenço//](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software e documentação do projeto.
+- [Camila](https://www.linkedin.com/in/camila-lourenco23032007): Responsável pelo desenvolvimento do software e documentação do projeto.
 - [Hércules da S. Pereira](https://www.linkedin.com/in/herculessp): Responsável pelo desenvolvimento do firmware e hardware do dispositivo.
 - [Keven Wanne//](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software.
-- [Yasmin E. P. da Silva](https://www.instagram.com/ysxmni): Responsável pelo desenvolvimento do software.
+- [Yasmin E. P. da Silva](https://www.linkedin.com/in/yasminpilla): Responsável pelo desenvolvimento do software e documentação do projeto.
 
 
 ## 📝 Licença
 
-Este projeto está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](./LICENSE) para mais detalhes.
+Este projeto está licenciado sob a Licença GPL-3.0. Veja o arquivo [LICENSE](./LICENSE) para mais detalhes.
