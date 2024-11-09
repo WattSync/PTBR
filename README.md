@@ -19,17 +19,17 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 ## 🛠️ Tecnologias Utilizadas
 
 ### Hardware
-- **Microcontrolador:** ESP32S3 (wroom 1) e ATmega328P
-- **Sensores de Corrente e Tensão**
-- **Componentes de Proteção:** Varistor 14D561K, Fusível de Queima Rápida de 25A e Diodo Zener 1N4733A
+- **Microcontrolador:** ESP32S3 (WROOM 1) e ATmega328P.
+- **Sensores de Corrente e Tensão:** ACS712 30A e Divisor de Tensão.
+- **Componentes de Proteção:** Varistor 14D561K, Fusível de Queima Rápida de 25A e Diodo Zener 1N4733A.
 
 ### Software
-- **Frontend do Aplicativo:** Flutter
-- **Backend:** C (para o ESP32)
-- **Armazenamento de Dados:** SQLite para o aplicativo
-- **Ferramentas de Design:** Canva, Figma, Paint, Fritzing, KiCad, Astah UML
-- **IDE:** Visual Studio Code, Arduino IDE, Google IDX
-- **Versionamento de Código:** Git, Github
+- **Frontend do Aplicativo:** Flutter.
+- **Backend:** C (para o ESP32 e ATmega328P).
+- **Armazenamento de Dados:** SQLite para o aplicativo.
+- **Ferramentas de Design:** Canva, Figma, Paint, Fritzing, KiCad, Astah UML.
+- **IDE:** Visual Studio Code, Arduino IDE, Google IDX.
+- **Versionamento de Código:** Git, Github.
 
 ## 🚀 Como Executar o Projeto
 
@@ -50,19 +50,17 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
     flutter pub get
     ```
 
-3. Conecte o ESP32 ao computador e faça upload do código na pasta `esp32_code` para o dispositivo usando a Arduino IDE ou.
+3. Conecte o ESP32 ao computador e faça upload do código na pasta `ESP32S3` para o ESP32S3 usando a Arduino IDE.
 
-4. Execute o aplicativo:
+4. Conecte o ATmega328P ao computador utilizando um gravador UART e faça upload do código na pasta `ATMEGA328P` usando a Arduino IDE.
+
+5. Execute o aplicativo:
     ```bash
     flutter run
     ```
 
-5. No aplicativo, insira o código do produto para acessar as funcionalidades de monitoramento e controle.
+6. No aplicativo, insira o código do produto para acessar as funcionalidades de monitoramento e controle.
 
-## 📊 Resultados Esperados
-- O WattSync oferece medição de corrente, tensão, potência e frequência, possibilitando o acompanhamento individualizado do consumo de cada aparelho conectado.
-- Possui a capacidade de alertar o usuário e desligar automaticamente dispositivos em caso de sobrecarga.
-- Interface intuitiva que facilita a interpretação dos dados de consumo e gera relatórios detalhados com gráficos de histórico.
 
 ## 💡 Estrutura do Projeto
 
@@ -72,9 +70,19 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 - `docs/`: Documentação do projeto, incluindo diagramas UML, Canvas do modelo de negócios e relatórios.
 
 
+Desenvolvido por [Equipe WattSync](https://github.com/WattSync) para o Trabalho de Conclusão de Curso do Técnico em Desenvolvimento de Sistemas da ETEC Raposo Tavares.
+
+
+## 👷👷‍♀️ Membros da Equipe
+
+- [Beatriz// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software e das apresentações.
+- [Bruno// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do website.
+- [Camila Lourenço//](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software e documentação do projeto.
+- [Hércules da S. Pereira](https://www.linkedin.com/in/herculessp): Responsável pelo desenvolvimento do firmware e hardware do dispositivo.
+- [Keven Wanne//](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software.
+- [Yasmin E. P. da Silva](https://www.instagram.com/ysxmni): Responsável pelo desenvolvimento do software.
+
+
 ## 📝 Licença
+
 Este projeto está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](./LICENSE) para mais detalhes.
-
----
-
-Desenvolvido com 💡 por [Equipe WattSync](https://github.com/usuario/WattSync) para o curso Técnico em Desenvolvimento de Sistemas.
