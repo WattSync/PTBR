@@ -10,7 +10,7 @@ Widget medidor(Color colorFirst, Color colorSecond, double min, double max,
       // widget do gauge inteiro
       enableLoadingAnimation: animation, // habilita a animação inicial
       animationDuration:
-          3000, // duração da animação, em milisegundos provavelmente
+          1000, // duração da animação, em milisegundos provavelmente
       axes: <RadialAxis>[
         RadialAxis(
           minimum: min,
@@ -45,7 +45,7 @@ Widget medidor(Color colorFirst, Color colorSecond, double min, double max,
                 ], // porcentagem de cada cor do gradiente, o $colorFirst começa no 0% e o $colorSecond no 75%
               ),
               enableAnimation: animation, // habilita a animação do progresso
-              animationDuration: 3000, // duração da animação do progresso
+              animationDuration: 1000, // duração da animação do progresso
               animationType:
                   AnimationType.ease, // tipo da animação do progresso
             ),
@@ -75,7 +75,7 @@ Widget medidor(Color colorFirst, Color colorSecond, double min, double max,
                     180), // aqui para dar um flip no gradiente, nesse momento ele é redundante, mas não tira
               ),
               enableAnimation: animation, // habilita a animação do ponteiro
-              animationDuration: 3000, // duração da animação do ponteiro
+              animationDuration: 1000, // duração da animação do ponteiro
               animationType: AnimationType.ease, // tipo da animação do ponteiro
               knobStyle: const KnobStyle(
                 knobRadius: 0, // Remove a bola no meio

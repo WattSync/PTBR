@@ -13,7 +13,7 @@ float voltageInput3 = 0;
 bool phaseWire1 = false;
 bool phaseWire2 = false;
 int errorCode = 0;
-bool systemON = false;
+bool systemON = true;
 
 unsigned long lastUpdateTime = 0;
 unsigned long lastZeroCrossingTime = 0;
@@ -30,7 +30,7 @@ int currentFilter();
 
 #define TX_PIN 3
 #define RX_PIN 7
-#define relayPin 4
+#define relayPin 2
 SoftwareSerial mySerial(RX_PIN, TX_PIN);
 
 void setup() {
@@ -44,7 +44,7 @@ void loop() {
   float powerOffVoltage = analogRead(powerOffPin) * (5.0 / 1023.0);
 
   if (powerOffVoltage >= 3.0) {
-    digitalWrite(relayPin, HIGH);  // Keeps the relay off if there is 3V on powerOffPin
+    digitalWrite(relayPin, HIGH); 
     systemON = false;
   } else {
     systemON = true;
@@ -119,18 +119,26 @@ void loop() {
     }
 
     // Serial prints
-    /*Serial.print("Real RMS Voltage: ");
+    Serial.print("Real RMS Voltage: ");
     Serial.print(totalVoltageRMS, 3);
     Serial.println(" V");
 
-    Serial.print(" Wire 1, Phase? ");
-    Serial.println(phaseWire1);
+    Serial.print("wire1: ");
+    Serial.print(voltageInput2, 3);
+    Serial.println(" V");
 
-    Serial.print(" Wire 2, Phase? ");
-    Serial.println(phaseWire2);
+    Serial.print("wire2: ");
+    Serial.print(voltageInput3, 3);
+    Serial.println(" V");
 
-    Serial.print("Is the relay ON? ");
-    Serial.println(systemON);
+    //Serial.print(" Wire 1, Phase? ");
+    //Serial.println(phaseWire1);
+
+    //Serial.print(" Wire 2, Phase? ");
+    //Serial.println(phaseWire2);
+
+    //Serial.print("Is the relay ON? ");
+    //Serial.println(systemON);
 
     Serial.print("Error code? ");
     Serial.println(errorCode);
@@ -145,10 +153,10 @@ void loop() {
 
     Serial.print("Power: ");
     Serial.print(totalVoltageRMS * currentRMS, 3);
-    Serial.println(" W");*/
+    Serial.println(" W");
 
     if (dataTransmitterVoltage >= 3.0) {
-      String message = String(totalVoltageRMS) + "," + String(currentRMS) + "," + String(acFrequency) + "," + String(systemON) + "," + String(phaseWire1) + "," + String(phaseWire2) + "," + String(errorCode);
+      String message = String(realVoltageRMS2) + "," + String(realVoltageRMS3) + "," + String(currentRMS) + "," + String(acFrequency) + "," + String(systemON) + "," + String(phaseWire1) + "," + String(phaseWire2) + "," + String(errorCode);
       mySerial.println(message);
       //Serial.println("Message sent to ESP32");
     }

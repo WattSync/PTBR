@@ -32,12 +32,12 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 WebServer server(80); // 80 é a porta padrão para HTTP
 HardwareSerial mySerial(1); // UART1
 
-float Voltage, Current, ValueInReal, Frequency, ValuePowerLimit = 0;
+float Voltage, Voltage_Wire_1, Voltage_Wire_2, Current, ValueInReal, Frequency, ValuePowerLimit = 0;
 float Power = Voltage * Current;
 float ValueTotal = Power /1000 * ValueInReal;
 bool PowerLimitDisplay, Wire_1, Wire_2, ON = 0;
 int error = 0;
-bool tema = false;
+bool tema = true;
 bool alreadyExecuted = false;
 uint16_t Color;
 
@@ -147,22 +147,31 @@ void setup() {
 void loop() {
   server.handleClient();
   ReciverData();
-  while (error == 0){
+  //Serial.print("V1: "); Serial.println(Voltage_Wire_1);
+  //Serial.print("V2: "); Serial.println(Voltage_Wire_2);
+  //Serial.print("I: "); Serial.println(Current);
+  //Serial.print("F: "); Serial.println(Frequency);
+  //Serial.print("ON: "); Serial.println(ON ? "Yes" : "No");
+  //Serial.print("Error: "); Serial.println(error);
+  if (error == 1) {
     digitalWrite(BUZZER_PIN, LOW);
     FillScreen();
     alreadyExecuted = false;
   }
-  if (error ==1){
+  
+  if (error == 0) {
     VoltageAlert();
     tone(BUZZER_PIN, 900);
     delay(1000);
   }
-  if (error ==2){
+  
+  if (error == 2) {
     CurrentAlert();
     tone(BUZZER_PIN, 700);
     delay(1000);
   }
 }
+
 
 
 
@@ -207,23 +216,26 @@ void ReciverData() {
   char* token = strtok(const_cast<char*>(receivedMessage.c_str()), ",");
   while (token != nullptr) {
     if (index == 0) {
-      Voltage = atof(token); 
+      Voltage_Wire_1 = atof(token); 
     } else if (index == 1) {
-      Current = atof(token);
+      Voltage_Wire_2 = atof(token);
     } else if (index == 2) {
-      Frequency = atof(token);
+      Current = atof(token);
     } else if (index == 3) {
-      ON = atoi(token);
+      Frequency = atof(token);
     } else if (index == 4) {
-      Wire_1 = atoi(token);
+      ON = atoi(token);
     } else if (index == 5) {
-      Wire_2 = atoi(token);
+      Wire_1 = atoi(token);
     } else if (index == 6) {
+      Wire_2 = atoi(token);
+    } else if (index == 7) {
       error = atoi(token);
     }
     token = strtok(nullptr, ",");
     index++;
   }
+  Voltage = Voltage_Wire_1 + Voltage_Wire_2;
 }
 
 
