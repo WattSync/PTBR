@@ -31,7 +31,7 @@ void main() async {
   runApp(
     ChangeNotifierProvider(
       create: (context) => appController,
-      child: TelaConfigApp(),
+      child: MyApp(),
     ),
   );
 }
