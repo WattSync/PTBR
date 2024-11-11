@@ -52,6 +52,7 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
     ```
 
 3. Conecte o ESP32 ao computador e faça upload do código na pasta `ESP32S3` para o ESP32S3 usando a Arduino IDE.
+    Selecione a placa "ESP32S3 Dev Module", em outras variações pode não funcionar corretamente.
 
 4. Conecte o ATmega328P ao computador utilizando um gravador UART e faça upload do código na pasta `ATMEGA328P` usando a Arduino IDE.
 
@@ -74,7 +75,7 @@ Desenvolver um dispositivo capaz de monitorar o consumo de energia elétrica em 
 Desenvolvido por [Equipe WattSync](https://github.com/WattSync) para o Trabalho de Conclusão de Curso do Técnico em Desenvolvimento de Sistemas da ETEC Raposo Tavares.
 
 
-## 👷👷‍♀️ Membros da Equipe
+### 👷👷‍♀️ Membros da Equipe
 
 - [Beatriz// ](https://www.linkedin.com/in/beatrizbernardess): Responsável pelo desenvolvimento do software e das apresentações.
 - [Bruno// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do website.
@@ -86,4 +87,4 @@ Desenvolvido por [Equipe WattSync](https://github.com/WattSync) para o Trabalho 
 
 ## 📝 Licença
 
-Este projeto está licenciado sob a Licença MIT. Veja o arquivo [LICENSE](./LICENSE) para mais detalhes.
+Este projeto está licenciado sob a Licença GPL-3.0. Veja o arquivo [LICENSE](./LICENSE) para mais detalhes.
