@@ -1,416 +1,523 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:wattsync/navigationbar.dart';
-import 'medidor.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'package:provider/provider.dart';
+import 'home.dart';
+import 'historico.dart';
+import 'configapp.dart';
+import 'alarme.dart';
 
-bool animation = true;
-double currentValue = 0;
-double voltageValue = 0;
-double powerValue = 0;
-double frequencyValue = 0;
-bool isOn = false;
-bool wire1 = false;
-bool wire2 = false;
-Timer? _timer;
+void main() async {
+  // Certifique-se de inicializar os bindings do Flutter antes de qualquer outra coisa
+  WidgetsFlutterBinding.ensureInitialized();
 
-Future<void> fetchData() async {
-  const url =
-      'http://WattSync.local/enviar-dados'; // Substitua pelo IP do ESP32. No caso do PC que não possui PORT, deixar "WattSync.local" no lugar do IP
+  // Aguarda a criação do banco de dados antes de rodar o app
+  bool isDatabaseReady = await initializeDatabase();
 
-  try {
-    final response =
-        await http.get(Uri.parse(url)).timeout(Duration(seconds: 5));
-    if (response.statusCode == 200) {
-      final jsonResponse = json.decode(response.body);
-      voltageValue = (jsonResponse['tensao'] as num).toDouble();
-      currentValue = (jsonResponse['corrente'] as num).toDouble();
-      frequencyValue = (jsonResponse['frequencia'] as num).toDouble();
-      isOn = jsonResponse['ligado'];
-      wire1 = jsonResponse['Fio1'];
-      wire2 = jsonResponse['Fio2'];
-    } else {
-      throw Exception('Erro ao receber dados: ${response.statusCode}');
-    }
-  } catch (error) {
-    print('Erro: $error');
-    // Trate o erro, talvez atualizando a interface do usuário
+  // Se o banco não estiver pronto, a execução do app é interrompida
+  if (isDatabaseReady) {
+    runApp(const MyApp());
+  } else {
+    print(
+        'Erro ao criar ou verificar o banco de dados. O app não pode ser iniciado.');
   }
-}
 
-void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  final appController = AppController();
+  await appController.loadPreferences();
   runApp(
-    TelaHome(),
+    ChangeNotifierProvider(
+      create: (context) => appController,
+      child: TelaConfigApp(),
+    ),
   );
 }
 
-class TelaHome extends StatelessWidget {
-  const TelaHome({super.key});
+Future<bool> initializeDatabase() async {
+  final String path = join(await getDatabasesPath(), 'medidas.db');
+  try {
+    // Tenta abrir o banco de dados e criar as tabelas se necessário
+    await openDatabase(
+      path,
+      version: 1, // Versão inicial do banco de dados
+      onCreate: (db, version) async {
+        // Criação das tabelas conforme as definições enviadas
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS seconds (
+            sec_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sec_time INTEGER,
+            sec_miliampers REAL,
+            sec_volts REAL,
+            sec_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS minutes (
+            min_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            min_time INTEGER,
+            min_miliampers REAL,
+            min_volts REAL,
+            min_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS hours (
+            hour_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hour_datetime INTEGER,
+            hour_miliampers REAL,
+            hour_volts REAL,
+            hour_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS last_24_hours (
+            lst_hour_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lst_hour_datetime INTEGER,
+            lst_hour_miliampers REAL,
+            lst_hour_volts REAL,
+            lst_hour_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS days (
+            day_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_date INTEGER,
+            day_ampers REAL,
+            day_volts REAL,
+            day_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS last_30_days (
+            lst_day_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lst_day_date INTEGER,
+            lst_day_ampers REAL,
+            lst_day_volts REAL,
+            lst_day_value_kw REAL
+          );
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS last_12_months (
+            lst_mnt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lst_mnt_date INTEGER,
+            lst_mnt_ampers REAL,
+            lst_mnt_volts REAL,
+            lst_mnt_value_kw REAL
+          );
+        ''');
+        print("Tabelas criadas com sucesso.");
+      },
+    );
+
+    print("Banco de dados 'medidas.db' criado com sucesso.");
+    return true;
+  } catch (e) {
+    print("Erro ao tentar abrir ou criar o banco de dados: $e");
+    return false;
+  }
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MyHomePage();
+    return MaterialApp(
+      home: HomeScreen(), // Tela principal
+    );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({
-    super.key,
-  });
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  String texto1 = "";
-  String texto2 = "";
-  bool determinante = false;
-  TextStyle textStyle1 = const TextStyle(color: Colors.black, fontSize: 14);
-  TextStyle textStyle2 = const TextStyle(color: Colors.black, fontSize: 14);
+class _HomeScreenState extends State<HomeScreen> {
+  int myIndex = 0;
+  late Timer _timer;
 
-  void typeOfWire() {
-    determinante = !wire1 && !wire2;
-    if (determinante) {
-      texto1 = 'Nenhuma rede identificada.';
-      texto2 = '';
-      textStyle1 = TextStyle(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : Colors.black,
-          fontSize: 16,
-          fontWeight: FontWeight.bold);
-      textStyle2 = TextStyle(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : Colors.black,
-          fontSize: 16,
-          fontWeight: FontWeight.bold);
-    } else {
-      if (wire1) {
-        texto1 = "Fase";
-        textStyle1 = TextStyle(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Color.fromARGB(255, 255, 137, 137)
-                : Color.fromARGB(255, 129, 11, 11),
-            fontSize: 16,
-            fontWeight: FontWeight.bold);
-      }
-      if (!wire1) {
-        texto1 = 'Neutro';
-        textStyle1 = TextStyle(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Color.fromARGB(255, 137, 191, 255)
-                : Color.fromARGB(255, 30, 82, 144),
-            fontSize: 16,
-            fontWeight: FontWeight.bold);
-      }
-      if (wire2) {
-        texto2 = ' Fase';
-        textStyle2 = TextStyle(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Color.fromARGB(255, 255, 137, 137)
-                : Color.fromARGB(255, 129, 11, 11),
-            fontSize: 16,
-            fontWeight: FontWeight.bold);
-      }
-      if (!wire2) {
-        texto2 = ' Neutro';
-        textStyle2 = TextStyle(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Color.fromARGB(255, 137, 191, 255)
-                : Color.fromARGB(255, 30, 82, 144),
-            fontSize: 16,
-            fontWeight: FontWeight.bold);
-      }
-    }
-  }
+  List<Widget> widgetList = [
+    TelaHome(), // Tela principal
+    TelaHistorico(),
+    TelaAlarme(), //Text('News', style: TextStyle(fontSize: 40)),
+    ConfigPage(), // Tela de histórico
+  ];
 
   @override
   void initState() {
     super.initState();
-    startTimer();
+    startTimer(); // Iniciar o Timer para buscar dados
   }
 
+  // Função para iniciar o Timer e buscar os dados
   void startTimer() {
-    const oneSec = Duration(seconds: 1);
+    const oneSec = Duration(seconds: 1); // A cada 1 segundo
     _timer = Timer.periodic(oneSec, (Timer timer) {
-      fetchData().then((_) {
-        if (!mounted) return;
-        setState(() {
-          powerValue = (currentValue * voltageValue);
-          typeOfWire();
-        });
-      });
+      fetchData(); // Buscar os dados a cada 1 segundo
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Calcula a largura do padding lateral
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final double padding = screenWidth * 0.05;
+  // Função que faz a requisição HTTP e insere os dados no banco
+  Future<void> fetchData() async {
+    const url = 'http://192.168.0.16/enviar-dados'; // IP do ESP32
 
-    // Determina a cor baseada no tema
-    final Color backgroundColor =
-        Theme.of(context).brightness == Brightness.dark
-            ? const Color.fromARGB(255, 30, 82, 144)
-            : const Color.fromARGB(255, 10, 21, 50);
+    try {
+      // Exibe uma mensagem de log indicando que a requisição está sendo feita
+      print('Tentando obter dados do servidor...');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "WattSync",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: backgroundColor,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: backgroundColor,
-              ),
-              height: 150,
-              child: Stack(
-                children: [
-                  Center(
-                    child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(25.0),
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Color.fromARGB(255, 10, 21, 50)
-                              : Color.fromARGB(255, 30, 82, 144),
-                        ),
-                        width: 360,
-                        height: 120,
-                        padding: const EdgeInsets.only(top: 12.0, left: 25.0),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              ('Seu consumo nos últimos 30 dias foi:'),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              ('R\$ XX.XX'),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 25,
-                                fontWeight: FontWeight.bold,
-                                height: 3,
-                              ),
-                            ),
-                          ],
-                        )),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25.0),
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? const Color.fromARGB(255, 30, 31, 28)
-                    : const Color.fromARGB(255, 235, 235, 235),
-              ),
-              width: 360,
-              height: 60,
-              padding: EdgeInsets.only(left: 20.0, right: 12.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Tipo de rede:',
-                    style: TextStyle(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 8.0), // Espaçamento entre os textos
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Text(
-                          texto1,
-                          style: textStyle1,
-                        ),
-                        if (texto1.isNotEmpty && texto2.isNotEmpty)
-                          Text(
-                            ' - ',
-                            style: TextStyle(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        Text(
-                          texto2,
-                          style: textStyle2,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(
-              height: 60,
-            ),
-            Padding(
-              padding: EdgeInsets.all(padding),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(25.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25.0),
-                  ),
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 2.0,
-                    mainAxisSpacing: 2.0,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1,
-                    children: [
-                      Container(
-                        alignment: Alignment.center,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color.fromARGB(255, 30, 31, 28)
-                            : const Color.fromARGB(255, 235, 235, 235),
-                        child: Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                ('Tensão'),
-                                style: TextStyle(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              medidor(
-                                  Colors.blue,
-                                  Colors.purple,
-                                  0,
-                                  240,
-                                  voltageValue, // Atualiza para usar a tensão recebida
-                                  animation,
-                                  "V"),
-                            ]),
-                      ),
-                      Container(
-                        alignment: Alignment.center,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color.fromARGB(255, 30, 31, 28)
-                            : const Color.fromARGB(255, 235, 235, 235),
-                        child: Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                ('Corrente'),
-                                style: TextStyle(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              medidor(
-                                  Colors.red,
-                                  Colors.orange,
-                                  0,
-                                  16,
-                                  currentValue, // Atualiza para usar a corrente recebida
-                                  animation,
-                                  "A"),
-                            ]),
-                      ),
-                      Container(
-                        alignment: Alignment.center,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color.fromARGB(255, 30, 31, 28)
-                            : const Color.fromARGB(255, 235, 235, 235),
-                        child: Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                ('Potência'),
-                                style: TextStyle(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              medidor(Colors.green, Colors.yellow, 0, 4000,
-                                  powerValue, animation, "W"),
-                            ]),
-                      ),
-                      Container(
-                        alignment: Alignment.center,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color.fromARGB(255, 30, 31, 28)
-                            : const Color.fromARGB(255, 235, 235, 235),
-                        child: Column(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                ('Frequência'),
-                                style: TextStyle(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              medidor(Colors.purple, Colors.pink, 0, 80,
-                                  frequencyValue, animation, "Hz"),
-                            ]),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      final response =
+          await http.get(Uri.parse(url)).timeout(Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+
+        // Verificando o conteúdo da resposta no terminal
+        print('Resposta recebida do servidor: $jsonResponse');
+
+        double voltageValue = (jsonResponse['tensao'] as num).toDouble();
+        double currentValue = (jsonResponse['corrente'] as num).toDouble();
+        double frequencyValue = (jsonResponse['frequencia'] as num).toDouble();
+
+        // Calcular potência
+        double powerValue = voltageValue * currentValue;
+
+        // Exibe os valores recebidos no terminal
+        print(
+            'Dados recebidos: Tensão: $voltageValue, Corrente: $currentValue, Potência: $powerValue, Frequência: $frequencyValue');
+
+        // Inserir dados no banco
+        await insertData(
+            voltageValue, currentValue, powerValue, frequencyValue);
+      } else {
+        // Exibe o erro caso o código de status HTTP não seja 200
+        print(
+            'Erro ao receber dados. Código de status HTTP: ${response.statusCode}');
+      }
+    } catch (error) {
+      // Exibe a mensagem de erro caso a requisição falhe
+      print('Erro ao tentar obter dados do servidor: $error');
+    }
+  }
+
+  // Função que abre a conexão com o banco de dados
+  Future<Database> openDatabaseConnection() async {
+    return openDatabase(
+      join(await getDatabasesPath(), 'medidas.db'),
+      version: 1,
     );
+  }
+
+  // Função que insere dados no banco de dados e processa as médias
+  // Função que insere dados no banco de dados e processa as médias
+  Future<void> insertData(double tensao, double corrente, double potencia,
+      double frequencia) async {
+    final Database db = await openDatabaseConnection();
+
+    // Inserir os dados na tabela 'seconds'
+    await db.insert(
+      'seconds',
+      {
+        'sec_time': DateTime.now().millisecondsSinceEpoch,
+        'sec_miliampers': corrente,
+        'sec_volts': tensao,
+        'sec_value_kw': potencia,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    print("Dados inseridos na tabela 'seconds'.");
+
+    // Verificar se há 60 registros na tabela 'seconds'
+    final countQuery = await db.rawQuery('SELECT COUNT(*) FROM seconds');
+    int count = Sqflite.firstIntValue(countQuery)!;
+
+    // Se houver 60 registros, calcular a média e enviar para a tabela 'minutes'
+    if (count >= 60) {
+      print("Atingiu 60 registros na tabela 'seconds'. Calculando a média...");
+
+      // Calcular a média dos valores
+      final averagesQuery = await db.rawQuery('''
+      SELECT AVG(sec_miliampers) AS avg_miliampers,
+             AVG(sec_volts) AS avg_volts,
+             AVG(sec_value_kw) AS avg_value_kw
+      FROM seconds
+    ''');
+
+      var averages = averagesQuery.first;
+      double avgCurrent =
+          (averages['avg_miliampers'] as num?)?.toDouble() ?? 0.0;
+      double avgVoltage = (averages['avg_volts'] as num?)?.toDouble() ?? 0.0;
+      double avgPower = (averages['avg_value_kw'] as num?)?.toDouble() ?? 0.0;
+
+      print(
+          'Média calculada na tabela "seconds": Corrente: $avgCurrent, Tensão: $avgVoltage, Potência: $avgPower');
+
+      // Inserir os dados calculados na tabela 'minutes'
+      await db.insert(
+        'minutes',
+        {
+          'min_time': DateTime.now().millisecondsSinceEpoch,
+          'min_miliampers': avgCurrent,
+          'min_volts': avgVoltage,
+          'min_value_kw': avgPower,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Média inserida na tabela 'minutes'.");
+
+      // Apagar os 60 registros da tabela 'seconds'
+      await db.rawDelete(
+          'DELETE FROM seconds WHERE sec_id IN (SELECT sec_id FROM seconds LIMIT 60)');
+      print("Registros apagados da tabela 'seconds'.");
+    }
+
+    // Verificar se há 60 registros na tabela 'minutes'
+    final countMinutesQuery = await db.rawQuery('SELECT COUNT(*) FROM minutes');
+    int countMinutes = Sqflite.firstIntValue(countMinutesQuery)!;
+
+    // Se houver 60 registros, calcular a média e enviar para a tabela 'hours'
+    if (countMinutes >= 60) {
+      print("Atingiu 60 registros na tabela 'minutes'. Calculando a média...");
+
+      // Calcular a média dos valores na tabela 'minutes'
+      final minutesAveragesQuery = await db.rawQuery('''
+      SELECT AVG(min_miliampers) AS avg_miliampers,
+             AVG(min_volts) AS avg_volts,
+             AVG(min_value_kw) AS avg_value_kw
+      FROM minutes
+    ''');
+
+      var minutesAverages = minutesAveragesQuery.first;
+      double avgCurrentMinutes =
+          (minutesAverages['avg_miliampers'] as num?)?.toDouble() ?? 0.0;
+      double avgVoltageMinutes =
+          (minutesAverages['avg_volts'] as num?)?.toDouble() ?? 0.0;
+      double avgPowerMinutes =
+          (minutesAverages['avg_value_kw'] as num?)?.toDouble() ?? 0.0;
+
+      print(
+          'Média calculada na tabela "minutes": Corrente: $avgCurrentMinutes, Tensão: $avgVoltageMinutes, Potência: $avgPowerMinutes');
+
+      // Inserir os dados calculados na tabela 'hours'
+      await db.insert(
+        'hours',
+        {
+          'hour_datetime': DateTime.now().millisecondsSinceEpoch,
+          'hour_miliampers': avgCurrentMinutes,
+          'hour_volts': avgVoltageMinutes,
+          'hour_value_kw': avgPowerMinutes,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Média inserida na tabela 'hours'.");
+      // Inserir os dados calculados na tabela 'last_24_hours'
+      await db.insert(
+        'last_24_hours',
+        {
+          'lst_hour_datetime': DateTime.now().millisecondsSinceEpoch,
+          'lst_hour_volts': avgVoltageMinutes,
+          'lst_hour_value_kw': avgPowerMinutes,
+          'lst_hour_miliampers': avgCurrentMinutes,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Dados inseridos na tabela 'last_24_hours'.");
+      // Gerenciar a rotação na tabela 'last_24_hours': excluir o primeiro registro se houver mais de 24
+      final countLast24Query =
+          await db.rawQuery('SELECT COUNT(*) FROM last_24_hours');
+      int countLast24 = Sqflite.firstIntValue(countLast24Query)!;
+
+      if (countLast24 > 24) {
+        await db.rawDelete(
+            'DELETE FROM last_24_hours WHERE lst_hour_id IN (SELECT lst_hour_id FROM last_24_hours LIMIT 1)');
+        print("Registro mais antigo apagado da tabela 'last_24_hours'.");
+      }
+      // Apagar os 60 registros da tabela 'minutes'
+      await db.rawDelete(
+          'DELETE FROM minutes WHERE min_id IN (SELECT min_id FROM minutes LIMIT 60)');
+      print("Registros apagados da tabela 'minutes'.");
+    }
+
+    // Verificar se há 24 registros na tabela 'hours'
+    final countHoursQuery = await db.rawQuery('SELECT COUNT(*) FROM hours');
+    int countHours = Sqflite.firstIntValue(countHoursQuery)!;
+
+    // Se houver 24 registros, calcular a média e somar os valores de 'hour_miliampers'
+    if (countHours >= 24) {
+      print("Atingiu 24 registros na tabela 'hours'. Calculando a média...");
+
+      // Calcular a média de todos os valores, exceto 'hour_miliampers'
+      final hoursAveragesQuery = await db.rawQuery('''
+      SELECT AVG(hour_volts) AS avg_volts,
+             AVG(hour_value_kw) AS avg_value_kw,
+             SUM(hour_miliampers) AS sum_miliampers
+      FROM hours
+    ''');
+
+      var hoursAverages = hoursAveragesQuery.first;
+      double avgVoltageHours =
+          (hoursAverages['avg_volts'] as num?)?.toDouble() ?? 0.0;
+      double avgPowerHours =
+          (hoursAverages['avg_value_kw'] as num?)?.toDouble() ?? 0.0;
+      double sumCurrentHours =
+          (hoursAverages['sum_miliampers'] as num?)?.toDouble() ?? 0.0;
+
+      print(
+          'Média calculada na tabela "hours": Tensão: $avgVoltageHours, Potência: $avgPowerHours, Soma Corrente: $sumCurrentHours');
+
+      // Inserir os dados calculados na tabela 'days'
+      await db.insert(
+        'days',
+        {
+          'day_date': DateTime.now().millisecondsSinceEpoch,
+          'day_volts': avgVoltageHours,
+          'day_value_kw': avgPowerHours,
+          'day_ampers': sumCurrentHours,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Média inserida na tabela 'days'.");
+      // Inserir os dados calculados na tabela 'last_30_days'
+      await db.insert(
+        'last_30_days',
+        {
+          'lst_day_date': DateTime.now().millisecondsSinceEpoch,
+          'lst_day_volts': avgVoltageHours,
+          'lst_day_value_kw': avgPowerHours,
+          'lst_day_ampers': sumCurrentHours,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Dados inseridos na tabela 'last_30_days'.");
+      // Gerenciar a rotação na tabela 'last_30_days': excluir o primeiro registro se houver mais de 30
+      final countLast30Query =
+          await db.rawQuery('SELECT COUNT(*) FROM last_30_days');
+      int countLast30 = Sqflite.firstIntValue(countLast30Query)!;
+
+      if (countLast30 > 30) {
+        await db.rawDelete(
+            'DELETE FROM last_30_days WHERE lst_day_id IN (SELECT lst_day_id FROM last_30_days LIMIT 1)');
+        print("Registro mais antigo apagado da tabela 'last_30_days'.");
+      }
+      // Apagar os 24 registros da tabela 'hours'
+      await db.rawDelete(
+          'DELETE FROM hours WHERE hour_id IN (SELECT hour_id FROM hours LIMIT 24)');
+      print("Registros apagados da tabela 'hours'.");
+    }
+
+    // Verificar se há 30 registros na tabela 'days'
+    final countDaysQuery = await db.rawQuery('SELECT COUNT(*) FROM days');
+    int countDays = Sqflite.firstIntValue(countDaysQuery)!;
+
+    // Se houver 30 registros, calcular a média e enviar para a tabela 'last_12_months'
+    if (countDays >= 30) {
+      print("Atingiu 30 registros na tabela 'days'. Calculando a média...");
+
+      // Calcular a média dos valores na tabela 'days'
+      final daysAveragesQuery = await db.rawQuery('''
+      SELECT AVG(day_volts) AS avg_volts,
+             AVG(day_value_kw) AS avg_value_kw,
+             SUM(day_ampers) AS sum_ampers
+      FROM days
+    ''');
+
+      var daysAverages = daysAveragesQuery.first;
+      double avgVoltageDays =
+          (daysAverages['avg_volts'] as num?)?.toDouble() ?? 0.0;
+      double avgPowerDays =
+          (daysAverages['avg_value_kw'] as num?)?.toDouble() ?? 0.0;
+      double sumCurrentDays =
+          (daysAverages['sum_ampers'] as num?)?.toDouble() ?? 0.0;
+
+      print(
+          'Média calculada na tabela "days": Tensão: $avgVoltageDays, Potência: $avgPowerDays, Soma Corrente: $sumCurrentDays');
+
+      // Inserir os dados calculados na tabela 'last_12_months'
+      await db.insert(
+        'last_12_months',
+        {
+          'lst_mnt_date': DateTime.now().millisecondsSinceEpoch,
+          'lst_mnt_volts': avgVoltageDays,
+          'lst_mnt_value_kw': avgPowerDays,
+          'lst_mnt_ampers': sumCurrentDays,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print("Média inserida na tabela 'last_12_months'.");
+
+      // Gerenciar a rotação na tabela 'last_12_months': excluir o primeiro registro se houver mais de 12
+      final countLast12Query =
+          await db.rawQuery('SELECT COUNT(*) FROM last_12_months');
+      int countLast12 = Sqflite.firstIntValue(countLast12Query)!;
+
+      if (countLast12 > 12) {
+        await db.rawDelete(
+            'DELETE FROM last_12_months WHERE lst_mnt_id IN (SELECT lst_mnt_id FROM last_12_months LIMIT 1)');
+        print("Registro mais antigo apagado da tabela 'last_12_months'.");
+      }
+
+      // Apagar os 30 registros da tabela 'days'
+      await db.rawDelete(
+          'DELETE FROM days WHERE day_id IN (SELECT day_id FROM days LIMIT 30)');
+      print("Registros apagados da tabela 'days'.");
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _timer.cancel(); // Cancelar o timer quando a tela for fechada
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: widgetList[myIndex], // Exibir a tela de acordo com a navegação
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        showUnselectedLabels: false,
+        backgroundColor: Color.fromARGB(255, 10, 21, 50),
+        selectedItemColor: Color.fromARGB(255, 137, 191, 255),
+        unselectedItemColor: Colors.white,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) {
+          setState(() {
+            myIndex = index; // Mudar a tela conforme o índice
+          });
+        },
+        currentIndex: myIndex,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assessment_sharp),
+            label: 'Histórico',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.access_time_sharp),
+            label: 'Ativação',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_sharp),
+            label: 'Configurações',
+          ),
+        ],
+      ),
+    );
   }
 }

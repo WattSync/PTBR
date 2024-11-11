@@ -1,13 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wattsync/configdispositivo.dart';
-import 'package:wattsync/navigationbar.dart';
+import 'package:flutter/services.dart';
+import 'database_helper_config.dart';
+
+/*void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final appController = AppController();
+  await appController.loadPreferences(); // Carrega as preferências
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => appController,
+      child: TelaConfigApp(),
+    ),
+  );
+}*/
+
+class TelaConfigApp extends StatelessWidget {
+  const TelaConfigApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppController>(
+      builder: (context, appController, child) {
+        return MaterialApp(
+          theme: ThemeData(
+            brightness:
+                appController.isDartTheme ? Brightness.dark : Brightness.light,
+          ),
+          home: ConfigPage(),
+        );
+      },
+    );
+  }
+}
 
 class ConfigPage extends StatelessWidget {
   ConfigPage();
 
   @override
   Widget build(BuildContext context) {
+    int consumptionLimit = Provider.of<AppController>(context).consumptionLimit;
+    double costPerKwh = Provider.of<AppController>(context).costPerKwh ?? 0.0;
+
+    // Controlador para o TextField
+    TextEditingController _costController =
+        TextEditingController(text: costPerKwh.toString());
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -24,7 +64,7 @@ class ConfigPage extends StatelessWidget {
           height: MediaQuery.of(context).size.height,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               //ALTERAR TEMA CLARO OU ESCURO
 
@@ -153,7 +193,8 @@ class ConfigPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: TextField(
-                      keyboardType: TextInputType.number,
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
                       style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.white // Cor do texto para tema escuro
@@ -161,6 +202,7 @@ class ConfigPage extends StatelessWidget {
                         fontSize: 18, // Tamanho da fonte
                         fontWeight: FontWeight.bold, // Peso da fonte
                       ),
+                      controller: _costController,
                       decoration: InputDecoration(
                         hintText: 'Digite o valor',
                         // Retira a barrinha roxa (outline) no foco
@@ -172,6 +214,12 @@ class ConfigPage extends StatelessWidget {
                               .none, // Remove a borda quando o campo não está em foco
                         ),
                       ),
+                      onChanged: (value) {
+                        double? enteredValue = double.tryParse(value);
+                        if (enteredValue != null) {
+                          costPerKwh = enteredValue;
+                        }
+                      },
                     ),
                   ),
                 ),
@@ -188,8 +236,16 @@ class ConfigPage extends StatelessWidget {
                   height: 50.0,
                   width: 200.0,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: Salvar as configurações
+                    onPressed: () async {
+                      // Salva o custo do kilowatt/h no banco de dados
+                      await DatabaseHelper().saveCostPerKwh(costPerKwh);
+
+                      // Atualiza o estado do AppController para refletir a mudança
+                      Provider.of<AppController>(context, listen: false)
+                          .saveCostPerKwh(costPerKwh);
+
+                      // Atualize a interface com o novo valor
+                      print("Custo do Kilowatt por hora salvo: $costPerKwh");
                     },
                     child: Text('Salvar', style: TextStyle(fontSize: 20.0)),
                     style: ButtonStyle(
@@ -224,8 +280,7 @@ class ConfigPage extends StatelessWidget {
                   width: 300.0,
                   child: ElevatedButton(
                     onPressed: () {
-                      _showConfirmationDialog(context);
-                      // TODO: Abrir a tela de limite de consumo
+                      _showLimitAdjustmentDialog(context, consumptionLimit);
                     },
                     child: Text(
                       "Definir limite de consumo",
@@ -284,29 +339,156 @@ class ConfigPage extends StatelessWidget {
   }
 }
 
-void _showConfirmationDialog(BuildContext context) {
+void _showLimitAdjustmentDialog(BuildContext context, int currentLimit) {
+  int selectedLimit = currentLimit; // Inicia com o valor atual
+  TextEditingController limitController =
+      TextEditingController(text: '$currentLimit');
+
   showDialog(
     context: context,
     builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text('Limite de Consumo'),
-        content: Text('Deseja definir o limite de consumo?'),
-        actions: <Widget>[
-          TextButton(
-            child: Text('Não'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-          TextButton(
-            child: Text('Sim'),
-            onPressed: () {
-              // TODO: Adicionar lógica para desconectar o dispositivo
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Definir Limite de Consumo'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Limite de consumo atual: $currentLimit',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(
+                  height: 10,
+                ),
+                Text(
+                  'Ajuste o valor entre 0 e 3600',
+                  style: TextStyle(
+                    fontSize: 15,
+                  ),
+                ),
+                Slider(
+                  value: selectedLimit.toDouble(),
+                  min: 0,
+                  max: 3600,
+                  divisions: 3600,
+                  label: '$selectedLimit',
+                  onChanged: (value) {
+                    setState(() {
+                      selectedLimit = value.toInt();
+                      limitController.text = selectedLimit.toString();
+                    });
+                  },
+                ),
+                TextField(
+                  controller: limitController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Digite o valor do limite',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    int? enteredValue = int.tryParse(value);
+                    if (enteredValue != null &&
+                        enteredValue >= 0 &&
+                        enteredValue <= 3600) {
+                      setState(() {
+                        selectedLimit = enteredValue;
+                      });
+                    } else if (enteredValue != null && enteredValue > 3600) {
+                      limitController.text = '3600'; // Limita o valor ao máximo
+                      limitController.selection = TextSelection.fromPosition(
+                          TextPosition(offset: limitController.text.length));
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                child: Text('Cancelar'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              TextButton(
+                child: Text('Confirmar'),
+                onPressed: () async {
+                  // Salva o limite usando o método `setConsumptionLimit` no controlador
+                  await Provider.of<AppController>(context, listen: false)
+                      .setConsumptionLimit(selectedLimit);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
       );
     },
   );
+}
+
+class AppController extends ChangeNotifier {
+  bool _isDartTheme = false;
+  bool get isDartTheme => _isDartTheme;
+
+  int _consumptionLimit = 0;
+  int get consumptionLimit => _consumptionLimit;
+
+  double? _costPerKwh;
+  double? get costPerKwh => _costPerKwh;
+
+  Future<void> loadPreferences() async {
+    await loadConsumptionLimit();
+    await loadThemePreference();
+    await loadCostPerKwh(); // Carregar custo do Kw/h
+  }
+
+  Future<void> loadConsumptionLimit() async {
+    _consumptionLimit = await DatabaseHelper().getConsumptionLimit() ?? 0;
+    print("Limite definido: $_consumptionLimit");
+    notifyListeners();
+  }
+
+  Future<void> setConsumptionLimit(int limit) async {
+    _consumptionLimit = limit; // Atualiza o valor localmente
+    await DatabaseHelper()
+        .saveConsumptionLimit(limit); // Salva no banco de dados
+    print("Limite definido: $_consumptionLimit"); // Print do Limite de Consumo
+    notifyListeners(); // Notifica para atualizar a interface
+  }
+
+  Future<void> loadThemePreference() async {
+    _isDartTheme = await DatabaseHelper().getThemePreference();
+    print("Preferência de tema carregada: $_isDartTheme"); // Print do valor
+    notifyListeners();
+  }
+
+  void changeTheme(bool isDart) async {
+    _isDartTheme = isDart;
+    // Salva a escolha de tema no banco de dados
+    await DatabaseHelper().saveThemePreference(isDart);
+    print(
+        "Preferência de tema carregada: $_isDartTheme"); // Print do valor, false = claro; true = escuro.
+    notifyListeners();
+  }
+
+  Future<void> loadCostPerKwh() async {
+    _costPerKwh = await DatabaseHelper().getCostPerKwh();
+    print("Custo do Kilowatt/h: $_costPerKwh");
+    notifyListeners();
+  }
+
+  Future<void> saveCostPerKwh(double cost) async {
+    _costPerKwh = cost;
+    await DatabaseHelper().saveCostPerKwh(cost);
+    print("Custo do Kilowatt/h salvo: $_costPerKwh");
+    notifyListeners(); // Atualiza a interface com o novo valor
+  }
 }

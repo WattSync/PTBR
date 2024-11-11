@@ -77,11 +77,11 @@ Desenvolvido por [Equipe WattSync](https://github.com/WattSync) para o Trabalho 
 
 ### 👷👷‍♀️ Membros da Equipe
 
-- [Beatriz// ](https://www.linkedin.com/in/beatrizbernardess): Responsável pelo desenvolvimento do software e das apresentações.
+- [Beatriz ](https://www.linkedin.com/in/beatrizbernardess): Responsável pelo desenvolvimento do software e das apresentações.
 - [Bruno// ](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do website.
 - [Camila](https://www.linkedin.com/in/camila-lourenco23032007): Responsável pelo desenvolvimento do software e documentação do projeto.
 - [Hércules da S. Pereira](https://www.linkedin.com/in/herculessp): Responsável pelo desenvolvimento do firmware e hardware do dispositivo.
-- [Keven Wanne//](https://github.com/usuario/WattSync): Responsável pelo desenvolvimento do software.
+- [Keven Wanne](http://www.linkedin.com/in/keven-wanne): Responsável pelo desenvolvimento do software.
 - [Yasmin E. P. da Silva](https://www.linkedin.com/in/yasminpilla): Responsável pelo desenvolvimento do software e documentação do projeto.
 
 

@@ -1,0 +1,363 @@
+html {
+    scroll-behavior: smooth; /* Scroll desliza sozinho e suave ao clicar em um href */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+}
+
+.container {
+    display: flex;
+    max-width: auto;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #213154;
+    color: #fff;
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-left: 4rem;
+}
+
+.nav-links {
+    display: flex;
+    gap: 50px;
+    margin-right: 80px;
+}
+
+.nav-link {
+    text-decoration: none;
+    color: #fff;
+    font-size: 1.4rem;
+}
+
+.nav-link:hover {
+    color: #e2e2e2;
+}
+
+.home {
+    height: 80vh;
+    background: linear-gradient(to right, #304773, #607d9f);
+    position: relative;
+}
+
+.home-text {
+    font-size: 5rem;
+    max-width: 0;
+    color: #fff;
+    font-weight: bold;
+    margin-left: 100px;
+    position: relative;
+    top: 200px;
+}
+
+.home p {
+    font-size: 2.5rem;
+    color: #fdfdfd;
+    position: relative;
+    top: 200px; 
+    /* line-height: 1.6;/* Espaçamento da linha */
+    margin: 0 0 0 100px;
+}
+
+.circle {
+    width: 550px;  /* Defina o tamanho do círculo */
+    height: 550px; /* Altura igual à largura para formar um círculo */
+    border-radius: 50%; /* Torna o contêiner circular */
+    overflow: hidden; /* Esconde partes da imagem que ultrapassam o círculo */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0; /* Opcional: cor de fundo */
+    margin-top: 10px;
+    position:  absolute;
+    top: 10px;
+    left: 130vh;
+}
+
+
+.circle img {
+    width: 100%;  /* Ajusta a largura da imagem ao contêiner */
+    height: 100%; /* Ajusta a altura da imagem ao contêiner */
+    object-fit: cover; /* Garante que a imagem preencha o círculo */
+}
+
+.produto {
+    background-color: #fdfdfd;
+    height: 80vh;
+    margin: 0;
+}
+
+.produto h2 {
+    text-align: center;
+    font-size: 5rem;
+    color: #999999;
+    padding-top: 30px;
+}
+
+.produto-grid {
+    display: flex;
+    justify-content: space-around; /* Alinha os itens com espaço igual ao redor */
+    align-items: center; /* Centraliza os itens verticalmente */
+}
+
+.produto-container {
+    display: flex;
+    flex-direction: column;
+    text-align: center; /* Centraliza o texto dentro do produto-container */
+    padding: 0; /* Ajuste o padding conforme necessário */
+    position: relative;
+}
+
+.produto-container img {
+    max-width: 250px; /* Ajuste o tamanho máximo da imagem conforme necessário */
+}
+
+.produto-container-conteudo-meio {
+  transition: .5s ease;
+  opacity: 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  -ms-transform: translate(-50%, -50%);
+}
+
+.produto-container:hover img {
+    opacity: 0.3;
+  }
+  
+.produto-container:hover .produto-container-conteudo-meio {
+    opacity: 1;
+  }
+
+.produto-container-conteudo-meio-texto {
+    background-color: #4CAF50;
+    color: white;
+    font-size: 16px;
+    padding: 16px 32px;
+}
+
+.produto-container-conteudo-meio a {
+    text-decoration: none;
+}
+
+.instrucoes {
+    background-color: #fdfdfd;
+    height: 130vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+.instrucoes h2 {
+    text-align: center;
+    font-size: 5rem;
+    color: #999999;
+    margin-top: 0;
+}
+
+.instrucoes h4 {
+    text-align: center;
+    font-size: 2rem;
+    color: #999999;
+    margin-top: 0;
+    padding: 0;
+}
+
+.instrucoes-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    max-width: 1340px;
+}
+
+/*.instrucoes-item {
+    width: 500px;
+    margin-bottom: 30px;
+    margin-left: 150px;
+    padding: 5px;
+    background-color: #f1f1f1;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}*/
+
+/* Ajuste nos containers de instrução */
+.instrucoes-item {
+    width: 500px;
+    height: 200px;
+    margin-bottom: 30px;
+    margin-left: 150px;
+    background-color: #f1f1f1; /* Cor de fundo leve */
+    border-radius: 8px; /* Borda arredondada */
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1); /* Sombra suave para dar profundidade */
+    padding: 5px; /* Espaçamento interno */
+    margin-bottom: 20px; /* Espaçamento entre os containers */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+}
+
+.instrucoes-item h2 {
+    margin: 0;
+    position: relative;
+    left: 20px;
+    top: 10px;
+}
+
+
+/* Ajuste do texto menor */
+.instrucoes-item p {
+    font-size: 1rem; /* Tamanho do texto pequeno */
+    color: #555555;
+    line-height: 1.2;
+    margin: 0; /* Remove margens adicionais */
+    position: relative;
+    top: -20px;
+    left: 5px;
+}
+
+.texto-instrucao {
+    font-size: 1.8rem;
+    margin-bottom: 0;
+    position: relative;
+    top: -50px;
+    left: 80px;
+}
+
+.qmsomos {
+    background-color: #fdfdfd;
+    height: 125vh;
+    margin: 0;
+}
+
+.qmsomos h2 {
+    text-align: center;
+    font-size: 5rem;
+    color: #999999;
+    margin-top: 0;
+}
+
+.qmsomos-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+}
+
+.qmsomos-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 70px;
+    max-width: 1000px;
+}
+
+.qmsomos-perfil {
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    width: 230px;
+    height: 250px;
+    transition: transform 0.2s ease-out; /* Define a transição para o efeito de escala */
+}
+
+.qmsomos-perfil:hover {
+    transform: scale(1.1); /* Aumenta a escala do ícone quando o mouse passa por cima */
+}
+
+.perfil-icon {    
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+}
+
+.qmsomos-perfil h2 {
+    font-size: 1.6rem;
+    margin-top: 20px;
+}
+
+.social-media-icon {
+    margin: 0;
+    width: 30px; /* largura desejada */
+    height: 30px; /* altura desejada */
+}
+
+footer {
+    background-color: #213154;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 50px 50px;
+}
+
+.left-title {
+    font-size: 2rem;
+}
+
+.left-subtitle {
+    font-size: 1.5rem;
+    padding-top: 30px;
+}
+
+.left, .middle {
+    display: flex;
+    flex-direction: column;
+}
+
+.middle a {
+    color: white;
+    text-decoration: none;
+    margin: 5px 0;
+    font-size: 1.2rem;
+}
+
+.middle a:hover {
+    text-decoration: underline;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.column h3 {
+    margin-bottom: 10px;
+}
+
+.column img {
+    width: 30px;
+    height: 30px;
+    margin: 5px;
+    filter: brightness(0) invert(1); /* Ajuste o filtro para branco */
+}
+
+.icons {
+    display: flex;
+    flex-direction: row;
+}
+
+.icons a {
+    margin: 0 5px;
+    transition: transform 0.2s ease-out; /* Define a transição para o efeito de escala */
+}
+
+.icons a:hover {
+    transform: scale(1.1); /* Aumenta a escala do ícone quando o mouse passa por cima */
+}
+.copyright {
+    background-color: #213154;
+    color: #fdfdfd;
+    text-align: center;
+    font-size: 15px;
+    margin-top: 0;
+    padding: 20px;
+}

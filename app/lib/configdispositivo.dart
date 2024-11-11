@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wattsync/navigationbar.dart';
+import 'configapp.dart';
 
 //CONSTRUIÇÃO DA TELA DO CELULAR
+bool temadispositivo = false;
 
 class configDispositivo extends StatefulWidget {
   @override
@@ -107,37 +108,48 @@ class configDispositivoState extends State<configDispositivo> {
                           ],
                         ),
                         Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              Radio<bool>(
-                                value: false,
-                                groupValue: appController.isDartTheme,
-                                fillColor:
-                                    MaterialStateProperty.resolveWith<Color>(
-                                        (Set<MaterialState> states) {
-                                  return appController.isDartTheme
-                                      ? Colors.white
-                                      : Colors.black;
-                                }),
-                                onChanged: (bool? value) {
-                                  appController.changeTheme(false);
-                                },
-                              ),
-                              Radio<bool>(
-                                value: true,
-                                groupValue: appController.isDartTheme,
-                                fillColor:
-                                    MaterialStateProperty.resolveWith<Color>(
-                                        (Set<MaterialState> states) {
-                                  return appController.isDartTheme
-                                      ? Colors.white
-                                      : Colors.black;
-                                }),
-                                onChanged: (bool? value) {
-                                  appController.changeTheme(true);
-                                },
-                              ),
-                            ]),
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Radio<bool>(
+                              value: false,
+                              groupValue:
+                                  temadispositivo, // Agora é baseado em temadispositivo
+                              fillColor:
+                                  MaterialStateProperty.resolveWith<Color>(
+                                      (Set<MaterialState> states) {
+                                return temadispositivo
+                                    ? Colors.white
+                                    : Colors
+                                        .black; // Define a cor com base em temadispositivo
+                              }),
+                              onChanged: (bool? value) {
+                                if (value != null) {
+                                  temadispositivo =
+                                      value; // Altera o valor de temadispositivo diretamente
+                                }
+                              },
+                            ),
+                            Radio<bool>(
+                              value: true,
+                              groupValue:
+                                  temadispositivo, // Também baseado em temadispositivo
+                              fillColor:
+                                  MaterialStateProperty.resolveWith<Color>(
+                                      (Set<MaterialState> states) {
+                                return temadispositivo
+                                    ? Colors.white
+                                    : Colors
+                                        .black; // Define a cor com base em temadispositivo
+                              }),
+                              onChanged: (bool? value) {
+                                if (value != null) {
+                                  temadispositivo =
+                                      value; // Altera o valor de temadispositivo diretamente
+                                }
+                              },
+                            ),
+                          ],
+                        )
                       ]),
                 ),
               ),
@@ -293,7 +305,10 @@ void _showConfirmationDialog(BuildContext context) {
             child: Text('Sim'),
             onPressed: () {
               // TODO: Adicionar lógica para desconectar o dispositivo
-              Navigator.of(context).pop();
+              // Navigator.of(context).pushAndRemoveUntil(
+              //  MaterialPageRoute(builder: (context) => TelaLogin()),
+              // (Route<dynamic> route) => false,
+              //);
             },
           ),
         ],

@@ -1,440 +1,326 @@
-// ignore_for_file: unused_import
-
-import 'dart:convert'; // Para manipulação de JSON
-import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:wattsync/database_helper.dart';
+import 'database_helper.dart';
 
-class TelaAlarme extends StatefulWidget {
-  const TelaAlarme({super.key});
-
-  @override
-  State<TelaAlarme> createState() => _TelaAlarmeState();
+void main() {
+  runApp(TelaAlarme());
 }
 
-class _TelaAlarmeState extends State<TelaAlarme> {
-  List<dynamic> alarms = [];
-  final DatabaseHelper dbHelper = DatabaseHelper();
+class TelaAlarme extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Alarm Manager',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: AlarmScreen(),
+    );
+  }
+}
+
+class AlarmScreen extends StatefulWidget {
+  @override
+  _AlarmScreenState createState() => _AlarmScreenState();
+}
+
+class _AlarmScreenState extends State<AlarmScreen> {
+  final DatabaseHelper _dbHelper = DatabaseHelper();
+  List<Map<String, dynamic>> _alarms = [];
 
   @override
   void initState() {
     super.initState();
-    fetchAlarms();
+    _fetchAlarms();
   }
 
-  // Função para buscar alarmes do backend (GET /alarms)
-  Future<void> fetchAlarms() async {
-    final response = await http.get(Uri.parse('http://localhost:3000/alarmes'));
+  String _getSelectedDays(Map<String, dynamic> alarm) {
+    List<String> selectedDays = [];
+    if (alarm['seg'] == 1) selectedDays.add('Segunda');
+    if (alarm['ter'] == 1) selectedDays.add('Terça');
+    if (alarm['qua'] == 1) selectedDays.add('Quarta');
+    if (alarm['qui'] == 1) selectedDays.add('Quinta');
+    if (alarm['sex'] == 1) selectedDays.add('Sexta');
+    if (alarm['sab'] == 1) selectedDays.add('Sábado');
+    if (alarm['dom'] == 1) selectedDays.add('Domingo');
+    return selectedDays.join(', ');
+  }
 
-    if (response.statusCode == 200) {
-      setState(() {
-        alarms = json.decode(response.body);
-      });
-    } else {
-      throw Exception('Falha ao carregar os alarmes');
+  Future<void> _fetchAlarms() async {
+    final List<Map<String, dynamic>> alarms = await _dbHelper.getAllAlarms();
+    print('Alarmes recuperados do banco de dados: $alarms');
+    setState(() {
+      _alarms = alarms;
+    });
+  }
+
+  Future<void> _updateAlarmStatus(int id, int isActive) async {
+    Map<String, dynamic> updatedAlarm = {'is_active': isActive};
+    await _dbHelper.updateAlarm(id, updatedAlarm);
+    _fetchAlarms();
+  }
+
+  Future<void> _addAlarm() async {
+    Map<String, dynamic> newAlarm = {
+      'start_time': '00:00',
+      'end_time': '00:00',
+      'seg': 1,
+      'ter': 1,
+      'qua': 1,
+      'qui': 1,
+      'sex': 1,
+      'sab': 0,
+      'dom': 0,
+      'is_active': 1,
+    };
+    await _dbHelper.insertAlarm(newAlarm);
+    _fetchAlarms();
+  }
+
+  Future<void> _updateAlarmTime(int id, String field, TimeOfDay time) async {
+    final formattedTime = time.format(context);
+    Map<String, dynamic> updatedAlarm = {field: formattedTime};
+    await _dbHelper.updateAlarm(id, updatedAlarm);
+    _fetchAlarms();
+  }
+
+  Future<void> _updateAlarmDay(int id, String day, int isSelected) async {
+    Map<String, dynamic> updatedAlarm = {day: isSelected};
+    await _dbHelper.updateAlarm(id, updatedAlarm);
+    _fetchAlarms();
+  }
+
+  Future<void> _selectTime(
+      BuildContext context, int id, String field, String currentTime) async {
+    final timeParts = currentTime.split(":");
+    TimeOfDay initialTime = TimeOfDay(
+      hour: int.parse(timeParts[0]),
+      minute: int.parse(timeParts[1]),
+    );
+    TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (pickedTime != null) {
+      await _updateAlarmTime(id, field, pickedTime);
     }
   }
 
-  // Função para adicionar um novo alarme (POST /alarms)
-  Future<void> addAlarm(
-      String startTime, String endTime, String weekdays, bool isActive) async {
-    final response = await http.post(
-      Uri.parse('http://localhost:3000/alarms'),
-      headers: <String, String>{
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'start_time': startTime,
-        'end_time': endTime,
-        'weekdays': weekdays,
-        'is_active': isActive,
-      }),
+  Future<void> _deleteAlarm(int id) async {
+    // Fazer uma cópia da lista de alarmes
+    List<Map<String, dynamic>> alarmsCopy = List.from(_alarms);
+
+    // Remover da lista copiada
+    alarmsCopy.removeWhere((alarm) => alarm['id'] == id);
+
+    // Atualizar o estado com a nova lista
+    setState(() {
+      _alarms = alarmsCopy;
+    });
+
+    final db = await _dbHelper.database;
+
+    // Excluir o alarme do banco de dados
+    int result = await db.delete(
+      'alarms',
+      where: 'id = ?',
+      whereArgs: [id],
     );
 
-    if (response.statusCode == 201) {
-      fetchAlarms(); // Atualizar a lista de alarmes
-    } else {
-      throw Exception('Falha ao adicionar alarme');
+    print('Alarme excluído: ID $id, Resultado $result');
+
+    // Resetar o contador do ID após a exclusão
+    await db.rawUpdate(
+        '''UPDATE sqlite_sequence SET seq = 0 WHERE name = 'alarms';''');
+
+    // Reordenar os IDs dos alarmes restantes para garantir sequência contínua
+    List<Map<String, dynamic>> remainingAlarms =
+        await db.query('alarms', orderBy: 'id ASC');
+
+    for (int i = 0; i < remainingAlarms.length; i++) {
+      int newId = i + 1;
+      int currentId = remainingAlarms[i]['id'];
+
+      if (currentId != newId) {
+        await db.update(
+          'alarms',
+          {'id': newId},
+          where: 'id = ?',
+          whereArgs: [currentId],
+        );
+      }
     }
+
+    // Recarregar a lista de alarmes após a exclusão
+    _fetchAlarms();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Gerenciador de Alarmes'),
+        title: Text('Alarm Manager'),
       ),
       body: ListView.builder(
-        itemCount: alarms.length,
+        itemCount: _alarms.length,
         itemBuilder: (context, index) {
-          final alarm = alarms[index];
-          return ListTile(
-            title: Text('De ${alarm['start_time']} até ${alarm['end_time']}'),
-            subtitle: Text(
-                'Dias: ${alarm['weekdays']} - Ativo: ${alarm['is_active']}'),
+          final alarm = _alarms[index];
+          return Dismissible(
+            key: Key(alarm['id'].toString()),
+            direction: DismissDirection.endToStart,
+            onDismissed: (direction) async {
+              await _deleteAlarm(alarm['id']);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Alarme excluído')),
+              );
+            },
+            background: Container(
+              color: Colors.red,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.only(right: 20),
+                  child: Icon(Icons.delete, color: Colors.white),
+                ),
+              ),
+            ),
+            child: Card(
+              color: Color.fromARGB(255, 116, 50, 157),
+              margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(10.0),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Alarme Programado',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                          ),
+                        ),
+                        Switch(
+                          value: alarm['is_active'] == 1,
+                          onChanged: (value) {
+                            int isActive = value ? 1 : 0;
+                            _updateAlarmStatus(alarm['id'], isActive);
+                          },
+                          activeTrackColor:
+                              const Color.fromARGB(255, 137, 191, 255),
+                        ),
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 15.0, right: 15.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          GestureDetector(
+                            onTap: () => _selectTime(context, alarm['id'],
+                                'start_time', alarm['start_time']),
+                            child: Row(
+                              children: [
+                                Text('DE:',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 25,
+                                    )),
+                                SizedBox(
+                                  width: 5,
+                                ),
+                                Text(
+                                  alarm['start_time'],
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _selectTime(context, alarm['id'],
+                                'end_time', alarm['end_time']),
+                            child: Row(
+                              children: [
+                                Text('ATÉ:',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 25,
+                                    )),
+                                SizedBox(
+                                  width: 5,
+                                ),
+                                Text(
+                                  alarm['end_time'],
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Wrap(
+                      spacing: 22,
+                      children: [
+                        _buildEditableDayChip(
+                            alarm['id'], 'D', 'dom', alarm['dom'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'S', 'seg', alarm['seg'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'T', 'ter', alarm['ter'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'Q', 'qua', alarm['qua'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'Q', 'qui', alarm['qui'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'S', 'sex', alarm['sex'] == 1),
+                        _buildEditableDayChip(
+                            alarm['id'], 'S', 'sab', alarm['sab'] == 1),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Exemplo de como adicionar um novo alarme
-          addAlarm('07:00', '15:00', 'Mon,Tue', true);
-        },
+        onPressed: _addAlarm,
         child: Icon(Icons.add),
       ),
     );
   }
-}
 
-class ActivationManager extends StatefulWidget {
-  const ActivationManager({super.key});
-
-  @override
-  _ActivationManagerState createState() => _ActivationManagerState();
-}
-
-class _ActivationManagerState extends State<ActivationManager> {
-  final _schedules = <Schedule>[
-    Schedule(DateTime.now(), TimeOfDay(hour: 5, minute: 30),
-        TimeOfDay(hour: 14, minute: 30))
-  ];
-  bool _isActive = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-          title: Text(
-            'Gerenciador de Ativação',
-            style: TextStyle(color: Colors.white),
+  Widget _buildEditableDayChip(
+      int id, String label, String day, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        int newSelectedState = isSelected ? 0 : 1;
+        _updateAlarmDay(id, day, newSelectedState);
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color.fromARGB(255, 137, 191, 255)
+              : Colors.grey[300],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
           ),
-          backgroundColor: Theme.of(context).brightness == Brightness.dark
-              ? const Color.fromARGB(255, 30, 82, 144)
-              : const Color.fromARGB(255, 10, 21, 50)),
-      body: ListView.builder(
-        itemCount: _schedules.length + 1, // Adicione 1 para o Switch e o Text
-        itemBuilder: (context, index) {
-          if (index < _schedules.length) {
-            //DELETAR ALARME ARRASTANDO PRA ESQUERDA
-            return Dismissible(
-              key: Key(_schedules[index].date.toString()),
-              direction: DismissDirection.endToStart,
-              onDismissed: (direction) {
-                setState(() {
-                  _schedules.removeAt(index);
-                });
-              },
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: EdgeInsets.only(right: 20.0),
-                color: Colors.red,
-                child: Icon(Icons.delete, color: Colors.white),
-              ),
-
-              //TELINHA DO ALARME
-              child: Center(
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  width: 400,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Color.fromARGB(255, 66, 14, 84)
-                        : Color.fromARGB(255, 116, 50, 157),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Alarme ${index + 1}: ',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-
-                      /* CALENDÁRIO
-                
-                         ElevatedButton(
-                          onPressed: () async {
-                            final DateTime? newDate = await showDatePicker(
-                                context: context,
-                                initialDate: _schedules[index].date,
-                                firstDate: DateTime(2022),
-                                lastDate: DateTime(2030));
-                            if (newDate != null) {
-                              setState(() {
-                                _schedules[index] = Schedule(
-                                    newDate,
-                                    _schedules[index].startTime,
-                                    _schedules[index].endTime);
-                              });
-                            }
-                          },
-                          child: Text(
-                              _schedules[index].date.toString().split(' ').first),
-                          style: ButtonStyle(
-                            backgroundColor: MaterialStateProperty.all<Color>(
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? Color.fromARGB(255, 66, 14, 84)
-                                  : Color.fromARGB(255, 116, 50, 157),
-                            ),
-                            foregroundColor:
-                                MaterialStateProperty.all<Color>(Colors.white),
-                          ),
-                        ), */
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          Text(
-                            'De: ',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.white,
-                            ),
-                          ),
-
-                          //PROGRAMAR HORÁRIO "DE"
-                          TextButton(
-                            style: ButtonStyle(
-                              foregroundColor: MaterialStateProperty.all<Color>(
-                                Color.fromARGB(255, 255, 255, 255),
-                              ),
-                              padding: MaterialStateProperty.all<EdgeInsets>(
-                                  EdgeInsets.zero),
-                              overlayColor: MaterialStateProperty.all<Color>(
-                                  Colors.transparent),
-                            ),
-                            onPressed: () async {
-                              final TimeOfDay? newTime = await showTimePicker(
-                                  context: context,
-                                  initialTime: _schedules[index].startTime,
-                                  builder: (context, child) {
-                                    return MediaQuery(
-                                      data: MediaQuery.of(context).copyWith(
-                                          alwaysUse24HourFormat: true),
-                                      child: child!,
-                                    );
-                                  });
-                              if (newTime != null) {
-                                setState(() {
-                                  _schedules[index] = Schedule(
-                                      _schedules[index].date,
-                                      newTime,
-                                      _schedules[index].endTime);
-                                });
-                              }
-                            },
-                            child: Text(
-                              MaterialLocalizations.of(context).formatTimeOfDay(
-                                  _schedules[index].startTime,
-                                  alwaysUse24HourFormat: true),
-                              style: TextStyle(
-                                fontSize: 40,
-                              ),
-                            ),
-                          ),
-
-                          //ESPAÇAMENTO
-                          SizedBox(width: 10),
-
-                          Text(
-                            'Até: ',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.white,
-                            ),
-                          ),
-
-                          //PROGRAMAR HORÁRIO "ATÉ"
-                          TextButton(
-                            style: ButtonStyle(
-                              foregroundColor: MaterialStateProperty.all<Color>(
-                                Color.fromARGB(255, 255, 255, 255),
-                              ),
-                              padding: MaterialStateProperty.all<EdgeInsets>(
-                                  EdgeInsets.zero),
-                              overlayColor: MaterialStateProperty.all<Color>(
-                                  Colors.transparent),
-                            ),
-                            onPressed: () async {
-                              final TimeOfDay? newTime = await showTimePicker(
-                                  context: context,
-                                  initialTime: _schedules[index].endTime,
-                                  builder: (context, child) {
-                                    return MediaQuery(
-                                      data: MediaQuery.of(context).copyWith(
-                                          alwaysUse24HourFormat: true),
-                                      child: child!,
-                                    );
-                                  });
-                              if (newTime != null) {
-                                setState(() {
-                                  _schedules[index] = Schedule(
-                                      _schedules[index].date,
-                                      _schedules[index].startTime,
-                                      newTime);
-                                });
-                              }
-                            },
-                            child: Text(
-                              MaterialLocalizations.of(context).formatTimeOfDay(
-                                  _schedules[index].endTime,
-                                  alwaysUse24HourFormat: true),
-                              style: TextStyle(
-                                fontSize: 40,
-                              ),
-                            ),
-                          ),
-
-                          //ATIVAR OU DESATIVAR ALARME
-                          Switch(
-                            value: _schedules[index].isActive,
-                            activeColor: Colors.white,
-                            inactiveTrackColor: Colors.grey[300],
-                            inactiveThumbColor: Colors.white,
-                            activeTrackColor:
-                                Color.fromARGB(255, 137, 191, 255),
-                            onChanged: (value) {
-                              setState(() {
-                                _schedules[index] = Schedule(
-                                    _schedules[index].date,
-                                    _schedules[index].startTime,
-                                    _schedules[index].endTime,
-                                    isActive: value);
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      //DIAS DA SEMANA
-                      WeekdayToggleButtons(),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          } else {
-            //BOTÃO SWITCH PARA ATIVAR OU DESATIVAR O DISPOSITIVO
-            return Column(
-              children: [
-                Switch(
-                  value: _isActive,
-                  activeColor: Colors.white,
-                  inactiveTrackColor: Colors.grey[700],
-                  inactiveThumbColor: Colors.white,
-                  activeTrackColor:
-                      Theme.of(context).brightness == Brightness.dark
-                          ? Color.fromARGB(255, 137, 191, 255)
-                          : Color.fromARGB(255, 30, 82, 144),
-                  onChanged: (value) {
-                    setState(() {
-                      _isActive = value;
-                    });
-                  },
-                ),
-                Text(_isActive ? 'Ativado' : 'Desativado'),
-              ],
-            );
-          }
-        },
-      ),
-
-      //ADICIONAR ALARME
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            _schedules.add(Schedule(DateTime.now(),
-                TimeOfDay(hour: 0, minute: 0), TimeOfDay(hour: 0, minute: 0)));
-          });
-        },
-        child: Icon(Icons.add),
-      ),
-    );
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(IterableProperty<Schedule>('_schedules', _schedules));
-  }
-}
-
-class Schedule {
-  DateTime date;
-  TimeOfDay startTime;
-  TimeOfDay endTime;
-  bool isActive;
-
-  Schedule(this.date, this.startTime, this.endTime, {this.isActive = true});
-}
-
-//DIAS DA SEMANA TOGGLEBUTTON
-
-class WeekdayToggleButtons extends StatefulWidget {
-  @override
-  _WeekdayToggleButtonsState createState() => _WeekdayToggleButtonsState();
-}
-
-class _WeekdayToggleButtonsState extends State<WeekdayToggleButtons> {
-  List<bool> isSelected = [false, false, false, false, false, false, false];
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        ToggleButtons(
-          isSelected: isSelected,
-          onPressed: (int index) {
-            setState(() {
-              isSelected[index] = !isSelected[index];
-            });
-          },
-          borderRadius: BorderRadius.circular(50),
-          borderColor: Colors.transparent,
-          selectedBorderColor: Colors.transparent,
-          fillColor: Colors.transparent,
-          selectedColor: Colors.transparent,
-          color: Colors.white,
-          children: [
-            _buildToggleButton('D', isSelected[0]),
-            _buildToggleButton('S', isSelected[1]),
-            _buildToggleButton('T', isSelected[2]),
-            _buildToggleButton('Q', isSelected[3]),
-            _buildToggleButton('Q', isSelected[4]),
-            _buildToggleButton('S', isSelected[5]),
-            _buildToggleButton('S', isSelected[6]),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToggleButton(String text, bool isSelected) {
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isSelected
-            ? Colors.transparent
-            : Color.fromARGB(255, 137, 191, 255),
-        border: Border.all(
-          color: isSelected ? Colors.white : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.black,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );

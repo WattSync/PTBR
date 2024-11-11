@@ -1,13 +1,12 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'dart:async';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   factory DatabaseHelper() => _instance;
-  static Database? _database;
-
   DatabaseHelper._internal();
+
+  Database? _database;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -16,73 +15,64 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'wattsync.db');
-
+    String path = join(await getDatabasesPath(), 'alarms.db');
     return await openDatabase(
       path,
       version: 1,
       onCreate: (db, version) async {
-        // Aqui você pode criar suas tabelas, se ainda não existirem.
+        await db.execute('''
+          CREATE TABLE alarms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time TEXT,
+            end_time TEXT,
+            seg INTEGER,
+            ter INTEGER,
+            qua INTEGER,
+            qui INTEGER,
+            sex INTEGER,
+            sab INTEGER,
+            dom INTEGER,
+            is_active INTEGER
+          )
+        ''');
       },
     );
   }
 
-  Future<List<Map<String, dynamic>>> getLast24HoursData() async {
+  // Inserção de um novo alarme
+  Future<int> insertAlarm(Map<String, dynamic> alarm) async {
     final db = await database;
-    return await db.query('last_24_hours');
+    int result = await db.insert('alarms', alarm);
+    print('Alarme inserido: $alarm');
+    return result;
   }
-}
 
-Future<void> _onCreate(Database db, int version) async {
-  await db.execute('''
-      CREATE TABLE IF NOT EXISTS alarmes (
-        alarme_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        status_boolean INTEGER,
-        hora_inicio TEXT NOT NULL,
-        hora_fim TEXT NOT NULL,
-        seg_semana INTEGER,
-        ter_semana INTEGER,
-        qua_semana INTEGER,
-        qui_semana INTEGER,
-        sex_semana INTEGER,
-        sab_semana INTEGER,
-        dom_semana INTEGER
-      )
-    ''');
-}
+  // Recuperação de todos os alarmes
+  Future<List<Map<String, dynamic>>> getAllAlarms() async {
+    final db = await database;
+    return await db.query('alarms');
+  }
 
-// Funções para alarmes
-Future<int> insertAlarm(Map<String, dynamic> alarm, dynamic database) async {
-  final db = await database;
-  return await db.insert('alarmes', alarm);
-}
+  // Atualização de um alarme específico
+  Future<int> updateAlarm(int id, Map<String, dynamic> updatedAlarm) async {
+    final db = await database;
+    int result = await db.update(
+      'alarms',
+      updatedAlarm,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    print('Alarme atualizado: ID $id, Novos dados: $updatedAlarm');
+    return result;
+  }
 
-Future<List<Map<String, dynamic>>> getAllAlarms(dynamic database) async {
-  final db = await database;
-  return await db.query('alarmes');
-}
-
-Future<int> deleteAlarm(int id, dynamic database) async {
-  final db = await database;
-  return await db.delete('alarmes', where: 'alarme_id = ?', whereArgs: [id]);
-}
-
-Future<int> updateAlarm(
-    int id, Map<String, dynamic> alarm, dynamic database) async {
-  final db = await database;
-  return await db
-      .update('alarmes', alarm, where: 'alarme_id = ?', whereArgs: [id]);
-}
-
-// Funções para histórico (exemplo)
-Future<int> insertHistorico(
-    Map<String, dynamic> historico, dynamic database) async {
-  final db = await database;
-  return await db.insert('historico', historico);
-}
-
-Future<List<Map<String, dynamic>>> getAllHistorico(dynamic database) async {
-  final db = await database;
-  return await db.query('historico');
+  // Exclusão de um alarme específico
+  Future<int> deleteAlarm(int id) async {
+    final db = await database;
+    return await db.delete(
+      'alarms',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 }

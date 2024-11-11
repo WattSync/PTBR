@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:syncfusion_flutter_charts/sparkcharts.dart';
-import 'database_helper.dart'; // Certifique-se de que o caminho esteja correto
-//import 'db_helper.dart'; // Importe o arquivo onde configurou o SQLite
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'dart:async';
 
+// Tela de Histórico
 class TelaHistorico extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return HistoricPage();
+    return MaterialApp(
+      home: HistoricPage(), // Tela de histórico
+    );
   }
 }
 
@@ -19,185 +22,204 @@ class HistoricPage extends StatefulWidget {
 }
 
 class HistoricPageState extends State<HistoricPage> {
-  String DropDownTime = 'Últimas 24h';
-  String DropDownType = 'Corrente';
-
+  String dropDownTime = 'Últimas 24h';
+  String dropDownType = 'Potência';
   List<_SalesData> data = [];
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _fetchData();
+    _startDataRefreshTimer();
   }
 
-  Future<void> _loadData() async {
-    List<Map<String, dynamic>> rawData =
-        await DatabaseHelper().getLast24HoursData();
-    print(rawData); // Depuração para verificar os dados recebidos.
-
-    setState(() {
-      data = rawData.map((entry) {
-        return _SalesData(
-          entry['lst_hour_datetime'].toString() ??
-              'N/A', // Verifique se está retornando um valor válido.
-          entry['lst_hour_value_kw'] ?? 0.0, // Substitua valores nulos por 0.0.
-        );
-      }).toList();
-      print(
-          "Dados carregados: ${data.length}"); // Verifique quantos pontos estão sendo carregados.
+  // Função para iniciar o timer e atualizar os dados
+  void _startDataRefreshTimer() {
+    const duration = Duration(seconds: 10);
+    _timer = Timer.periodic(duration, (timer) {
+      _fetchData(); // Atualiza os dados periodicamente
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Histórico de consumo',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color.fromARGB(255, 30, 82, 144)
-            : const Color.fromARGB(255, 10, 21, 50),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  DropdownMenu2(
-                    onChanged: (value) {
-                      setState(() {
-                        DropDownTime = value;
-                        // Atualize os dados conforme o intervalo de tempo selecionado
-                        _loadData(); // Chame a função para carregar os dados atualizados
-                      });
-                    },
-                  ),
-                  SizedBox(width: 10),
-                  DropdownMenuType(
-                    onChanged: (value) {
-                      setState(() {
-                        DropDownType = value;
-                        // Aqui você pode adicionar lógica com base no valor selecionado
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-            SfCartesianChart(
-              primaryXAxis: CategoryAxis(
-                labelStyle: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[500]
-                        : Colors.grey[700],
-                    fontWeight: FontWeight.bold),
-              ),
-              primaryYAxis: NumericAxis(
-                labelStyle: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[500]
-                        : Colors.grey[700],
-                    fontWeight: FontWeight.bold),
-              ),
-              title: ChartTitle(
-                text: 'Histórico de Consumo',
-                textStyle: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-              legend: Legend(
-                isVisible: true,
-                textStyle: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-              tooltipBehavior: TooltipBehavior(enable: true),
-              series: <CartesianSeries<_SalesData, String>>[
-                LineSeries<_SalesData, String>(
-                  dataSource: data,
-                  xValueMapper: (_SalesData sales, _) => sales.year,
-                  yValueMapper: (_SalesData sales, _) => sales.sales,
-                  name: 'Consumo',
-                  color: Color.fromARGB(255, 116, 50, 157),
-                  dataLabelSettings: DataLabelSettings(
-                      isVisible: true,
-                      textStyle:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  markerSettings: MarkerSettings(
-                    isVisible: true,
-                    shape: DataMarkerType.circle,
-                    color: Color.fromARGB(255, 116, 50, 157),
-                  ),
-                )
-              ],
-            ),
-          ],
-        ),
-      ),
+  // Função para buscar dados com base no dropdown de tempo e tipo
+  Future<void> _fetchData() async {
+    final Database db = await openDatabase(
+      join(await getDatabasesPath(), 'medidas.db'),
     );
-  }
-}
 
-/* class HistoricPageState extends State<HistoricPage> {
-  String DropDownTime = 'Últimas 24h';
-  String DropDownType = 'Corrente';
-  List<_SalesData> data = [];
+    String table = 'last_24_hours'; // Tabela padrão
+    String timeColumn = 'lst_hour_datetime';
+    String typeColumn = 'lst_hour_miliampers';
+    String voltColumn = 'lst_hour_volts';
+    String valueColumn = 'lst_hour_value_kw';
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
+    // Definir a tabela e a consulta baseada no dropdown de tempo
+    switch (dropDownTime) {
+      case 'Últimas 24h':
+        table = 'last_24_hours';
+        timeColumn = 'lst_hour_datetime';
+        typeColumn = 'lst_hour_miliampers';
+        voltColumn = 'lst_hour_volts';
+        valueColumn = 'lst_hour_value_kw';
+        break;
+      case 'Últimos 7 dias':
+        table = 'last_30_days';
+        timeColumn = 'lst_day_date';
+        typeColumn = 'lst_day_ampers';
+        voltColumn = 'lst_day_volts';
+        valueColumn = 'lst_day_value_kw';
+        break;
+      case 'Últimos 30 dias':
+        table = 'last_30_days';
+        timeColumn = 'lst_day_date';
+        typeColumn = 'lst_day_ampers';
+        voltColumn = 'lst_day_volts';
+        valueColumn = 'lst_day_value_kw';
+        break;
+      case 'Últimos 15 dias':
+        table = 'last_30_days';
+        timeColumn = 'lst_day_date';
+        typeColumn = 'lst_day_ampers';
+        voltColumn = 'lst_day_volts';
+        valueColumn = 'lst_day_value_kw';
+        break;
+      case 'Últimos 6 meses':
+        table = 'last_12_months';
+        timeColumn = 'lst_mnt_date';
+        typeColumn = 'lst_mnt_ampers';
+        voltColumn = 'lst_mnt_volts';
+        valueColumn = 'lst_mnt_value_kw';
+        break;
+      case 'Últimos 12 meses':
+        table = 'last_12_months';
+        timeColumn = 'lst_mnt_date';
+        typeColumn = 'lst_mnt_ampers';
+        voltColumn = 'lst_mnt_volts';
+        valueColumn = 'lst_mnt_value_kw';
+        break;
+      default:
+        break;
+    }
 
-  // Função para carregar os dados do banco de dados
-  Future<void> _loadData() async {
-    final dbHelper = DBHelper();
-    List<Map<String, dynamic>> results =
-        await dbHelper.getSecondsData(DropDownTime);
+    // Definir o limite de registros com base no dropdown de tempo
+    int limit = getRecordLimit(dropDownTime);
 
-    // Transformar os dados do banco em _SalesData
-    List<_SalesData> salesData = results.map((record) {
-      // Ajuste o mapeamento dependendo da tabela
-      String time;
-      double value;
+    // Obter registros com base na consulta anterior
+    final List<Map<String, dynamic>> records = await db.query(
+      table,
+      orderBy: '$timeColumn DESC',
+      limit: limit,
+    );
+    // Função para arredondar valores para 2 casas decimais
+    double _roundToTwoDecimals(double value) {
+      return (value * 100).roundToDouble() / 100;
+    }
 
-      if (DropDownTime == 'Últimas 24h') {
-        time = record['lst_hour_datetime']
-            .toString(); // Formate conforme necessário
-        value = record['lst_hour_miliampers'] ??
-            0.0; // Mude para o valor que deseja plotar
-      } else if (DropDownTime == 'Últimos 30 dias') {
-        time = record['lst_day_date'].toString(); // Formate conforme necessário
-        value = record['lst_day_ampers'] ??
-            0.0; // Mude para o valor que deseja plotar
-      } else if (DropDownTime == 'Últimos 12 meses') {
-        time = record['lst_mnt_date'].toString(); // Formate conforme necessário
-        value = record['lst_mnt_ampers'] ??
-            0.0; // Mude para o valor que deseja plotar
-      } else {
-        time = ''; // Para outros casos, se necessário
-        value = 0.0; // Valor padrão
+    setState(() {
+      List<_SalesData> groupedData = [];
+      double sum = 0;
+      int count = 0;
+
+      // Aqui estamos aplicando o agrupamento de dados conforme o intervalo de tempo selecionado
+      for (int i = 0; i < records.length; i++) {
+        final record = records[i];
+        final double value = dropDownType == 'Valor'
+            ? _roundToTwoDecimals(
+                ((record[voltColumn] ?? 0) * (record[typeColumn] ?? 0) / 1000) *
+                    (record[valueColumn] ?? 0))
+            : _roundToTwoDecimals(
+                ((record[voltColumn] ?? 0) * (record[typeColumn] ?? 0) / 1000));
+
+        sum += value;
+        count++;
+
+        // Lógica de agrupamento de dados conforme o tempo selecionado
+        if (dropDownTime == 'Últimas 24h') {
+          // Para "Últimas 24h", fazemos o agrupamento de 4 em 4 registros
+          if (count == 4 || i == records.length - 1) {
+            double avgValue = sum / count; // Calcula a média
+            String label =
+                '${groupedData.length * 4 + 1}h - ${groupedData.length * 4 + 4}h'; // Exibe o intervalo de 4 horas
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        } else if (dropDownTime == 'Últimos 7 dias') {
+          // Para "Últimos 7 dias", agrupamos em intervalos de 1 dia
+          if (i % 1 == 0 || i == records.length - 1) {
+            double avgValue = sum / count;
+            String label = '${groupedData.length + 1} dia';
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        } else if (dropDownTime == 'Últimos 15 dias') {
+          // Para "Últimos 15 dias", agrupamos em intervalos de 3 dias
+          if (i % 3 == 0 || i == records.length - 1) {
+            double avgValue = sum / count;
+            String label = '${groupedData.length + 1} dia(s)';
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        } else if (dropDownTime == 'Últimos 30 dias') {
+          // Para "Últimos 30 dias", agrupamos em intervalos de 5 dias
+          if (i % 5 == 0 || i == records.length - 1) {
+            double avgValue = sum / count;
+            String label = '${groupedData.length + 1} dia(s)';
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        } else if (dropDownTime == 'Últimos 6 meses') {
+          // Para "Últimos 6 meses", agrupamos em intervalos de 1 mês
+          if (i % 1 == 0 || i == records.length - 1) {
+            double avgValue = sum / count;
+            String label = '${groupedData.length + 1} mês';
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        } else if (dropDownTime == 'Últimos 12 meses') {
+          // Para "Últimos 12 meses", agrupamos em intervalos de 2 meses
+          if (i % 2 == 0 || i == records.length - 1) {
+            double avgValue = sum / count;
+            String label = '${groupedData.length + 1} mês(s)';
+
+            groupedData.add(_SalesData(label, avgValue));
+
+            sum = 0;
+            count = 0;
+          }
+        }
       }
 
-      return _SalesData(time, value);
-    }).toList();
+      data = groupedData;
 
-    setState(() {
-      data = salesData;
+      // Verifica se os dados são suficientes para o limite, senão não preenche com "N/A"
+      if (data.length < limit) {
+        int missingDataCount = limit - data.length;
+        // Não preenche com dados "N/A" se não houver dados suficientes
+        // Nesse caso, você pode apenas limitar os dados ou ajustar o comportamento de exibição
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel(); // Cancelar o timer ao descartar o widget
+    super.dispose();
   }
 
   @override
@@ -209,8 +231,8 @@ class HistoricPageState extends State<HistoricPage> {
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color.fromARGB(255, 30, 82, 144)
-            : const Color.fromARGB(255, 10, 21, 50),
+            ? const Color.fromARGB(255, 10, 21, 50)
+            : const Color.fromARGB(255, 30, 82, 144),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -221,108 +243,130 @@ class HistoricPageState extends State<HistoricPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  DropdownMenu2(
+                  DropdownMenuTime(
                     onChanged: (value) {
                       setState(() {
-                        DropDownTime = value;
-                        _loadData(); // Recarrega os dados com base na seleção de tempo
+                        dropDownTime = value;
+                        _fetchData(); // Recarrega os dados ao mudar a opção
                       });
                     },
                   ),
-
-                  SizedBox(
-                      width: 10), // Espaçamento entre os dois DropdownButtons
+                  const SizedBox(width: 10),
                   DropdownMenuType(
                     onChanged: (value) {
                       setState(() {
-                        DropDownType = value;
-                        // Aqui você pode adicionar lógica com base no valor selecionado
+                        dropDownType = value;
+                        _fetchData(); // Recarrega os dados ao mudar a opção
                       });
                     },
                   ),
                 ],
               ),
             ),
-            SfCartesianChart(
-              primaryXAxis: CategoryAxis(
-                labelStyle: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[500]
-                        : Colors.grey[700],
-                    fontWeight: FontWeight.bold),
-              ),
-              primaryYAxis: NumericAxis(
-                labelStyle: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[500]
-                        : Colors.grey[700],
-                    fontWeight: FontWeight.bold),
-              ),
-              title: ChartTitle(
-                text: 'Histórico de Consumo',
-                textStyle: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-              legend: Legend(
-                isVisible: true,
-                textStyle: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
-              ),
-              tooltipBehavior: TooltipBehavior(enable: true),
-              series: <CartesianSeries<_SalesData, String>>[
-                LineSeries<_SalesData, String>(
-                  dataSource: data,
-                  xValueMapper: (_SalesData sales, _) => sales.year,
-                  yValueMapper: (_SalesData sales, _) => sales.sales,
-                  name: 'Consumo',
-                  color: Color.fromARGB(255, 116, 50, 157),
-                  dataLabelSettings: DataLabelSettings(
+            data.isEmpty
+                ? const Center(child: Text("Nenhum dado disponível"))
+                : SfCartesianChart(
+                    primaryXAxis: CategoryAxis(
+                      labelStyle: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[500]
+                            : Colors.grey[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    primaryYAxis: NumericAxis(
+                      labelStyle: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[500]
+                            : Colors.grey[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    title: ChartTitle(
+                      text: 'Histórico de Consumo',
+                      textStyle: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                    legend: Legend(
                       isVisible: true,
-                      textStyle:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  markerSettings: MarkerSettings(
-                    isVisible: true,
-                    shape: DataMarkerType.circle,
-                    color: Color.fromARGB(255, 116, 50, 157),
+                      textStyle: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                    tooltipBehavior: TooltipBehavior(enable: true),
+                    series: <CartesianSeries<_SalesData, String>>[
+                      LineSeries<_SalesData, String>(
+                        dataSource: data,
+                        xValueMapper: (_SalesData sales, _) => sales.label,
+                        yValueMapper: (_SalesData sales, _) => sales.value,
+                        name: 'Consumo',
+                        color: const Color.fromARGB(255, 116, 50, 157),
+                        dataLabelSettings: const DataLabelSettings(
+                            isVisible: true,
+                            textStyle: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        markerSettings: const MarkerSettings(
+                          isVisible: true,
+                          shape: DataMarkerType.circle,
+                          color: Color.fromARGB(255, 116, 50, 157),
+                        ),
+                      )
+                    ],
                   ),
-                )
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: SfSparkLineChart.custom(
-                trackball: SparkChartTrackball(
-                    activationMode: SparkChartActivationMode.tap),
-                marker: SparkChartMarker(
-                    displayMode: SparkChartMarkerDisplayMode.all),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
-} */
 
-class DropdownMenu2 extends StatefulWidget {
-  final ValueChanged<String> onChanged;
-
-  const DropdownMenu2({super.key, required this.onChanged});
-
-  @override
-  State<DropdownMenu2> createState() => _DropdownMenuState();
+  // Função para obter o número de registros com base no tempo selecionado
+  int getRecordLimit(String dropDownTime) {
+    switch (dropDownTime) {
+      case 'Últimas 24h':
+        return 24; // Últimas 24 horas
+      case 'Últimos 7 dias':
+        return 7; // Últimos 7 dias
+      case 'Últimos 15 dias':
+        return 15; // Últimos 15 dias
+      case 'Últimos 30 dias':
+        return 30; // Últimos 30 dias
+      case 'Últimos 6 meses':
+        return 6; // Últimos 6 meses
+      case 'Últimos 12 meses':
+        return 12; // Últimos 12 meses
+      default:
+        return 24; // Valor padrão (quando o tempo não é especificado)
+    }
+  }
 }
 
-const List<String> list = <String>[
+// Model para armazenar as informações de gráfico
+class _SalesData {
+  _SalesData(this.label, this.value);
+
+  final String label;
+  final double value;
+}
+
+// Dropdown de tempo
+class DropdownMenuTime extends StatefulWidget {
+  final ValueChanged<String> onChanged;
+
+  const DropdownMenuTime({super.key, required this.onChanged});
+
+  @override
+  State<DropdownMenuTime> createState() => _DropdownMenuTimeState();
+}
+
+const List<String> timeOptions = <String>[
   'Últimas 24h',
   'Últimos 7 dias',
   'Últimos 15 dias',
@@ -331,20 +375,20 @@ const List<String> list = <String>[
   'Últimos 12 meses'
 ];
 
-class _DropdownMenuState extends State<DropdownMenu2> {
-  String DropDownTime = list.first;
+class _DropdownMenuTimeState extends State<DropdownMenuTime> {
+  String selectedValue = timeOptions.first;
 
   @override
   Widget build(BuildContext context) {
     return DropdownButton<String>(
-      value: DropDownTime,
+      value: selectedValue,
       onChanged: (String? newValue) {
         setState(() {
-          DropDownTime = newValue!;
+          selectedValue = newValue!;
         });
-        widget.onChanged(DropDownTime);
+        widget.onChanged(selectedValue);
       },
-      items: list.map<DropdownMenuItem<String>>((String value) {
+      items: timeOptions.map<DropdownMenuItem<String>>((String value) {
         return DropdownMenuItem<String>(
           value: value,
           child: Text(value,
@@ -367,14 +411,7 @@ class _DropdownMenuState extends State<DropdownMenu2> {
   }
 }
 
-class _SalesData {
-  _SalesData(this.year, this.sales);
-
-  final String year;
-  final double sales;
-}
-
-// Novo Dropdown para selecionar "Corrente" ou "Valor"
+// Dropdown de tipo de dados (Potência ou Corrente)
 class DropdownMenuType extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
@@ -384,22 +421,22 @@ class DropdownMenuType extends StatefulWidget {
   State<DropdownMenuType> createState() => _DropdownMenuTypeState();
 }
 
-const List<String> types = <String>['Corrente', 'Valor'];
+const List<String> typeOptions = <String>['Potência', 'Valor'];
 
 class _DropdownMenuTypeState extends State<DropdownMenuType> {
-  String DropDownType = types.first;
+  String selectedType = typeOptions.first;
 
   @override
   Widget build(BuildContext context) {
     return DropdownButton<String>(
-      value: DropDownType,
+      value: selectedType,
       onChanged: (String? newValue) {
         setState(() {
-          DropDownType = newValue!;
+          selectedType = newValue!;
         });
-        widget.onChanged(DropDownType);
+        widget.onChanged(selectedType);
       },
-      items: types.map<DropdownMenuItem<String>>((String value) {
+      items: typeOptions.map<DropdownMenuItem<String>>((String value) {
         return DropdownMenuItem<String>(
           value: value,
           child: Text(value,
