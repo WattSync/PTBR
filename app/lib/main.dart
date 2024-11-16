@@ -9,31 +9,31 @@ import 'home.dart';
 import 'historico.dart';
 import 'configapp.dart';
 import 'alarme.dart';
+import 'database_helper_config.dart';
 
+double valor = 0;
 void main() async {
   // Certifique-se de inicializar os bindings do Flutter antes de qualquer outra coisa
   WidgetsFlutterBinding.ensureInitialized();
+
+  final appController = AppController();
+  await appController.loadPreferences();
 
   // Aguarda a criação do banco de dados antes de rodar o app
   bool isDatabaseReady = await initializeDatabase();
 
   // Se o banco não estiver pronto, a execução do app é interrompida
   if (isDatabaseReady) {
-    runApp(const MyApp());
+    runApp(
+      ChangeNotifierProvider(
+        create: (context) => appController,
+        child: MyApp(),
+      ),
+    );
   } else {
     print(
         'Erro ao criar ou verificar o banco de dados. O app não pode ser iniciado.');
   }
-
-  WidgetsFlutterBinding.ensureInitialized();
-  final appController = AppController();
-  await appController.loadPreferences();
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => appController,
-      child: MyApp(),
-    ),
-  );
 }
 
 Future<bool> initializeDatabase() async {
@@ -125,8 +125,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: HomeScreen(), // Tela principal
+    return Consumer<AppController>(
+      builder: (context, appController, child) {
+        return MaterialApp(
+          theme: ThemeData(
+            brightness:
+                appController.isDartTheme ? Brightness.dark : Brightness.light,
+          ),
+          home: HomeScreen(),
+        );
+      },
     );
   }
 }
@@ -180,20 +188,18 @@ class _HomeScreenState extends State<HomeScreen> {
         // Verificando o conteúdo da resposta no terminal
         print('Resposta recebida do servidor: $jsonResponse');
 
-        double voltageValue = (jsonResponse['tensao'] as num).toDouble();
-        double currentValue = (jsonResponse['corrente'] as num).toDouble();
-        double frequencyValue = (jsonResponse['frequencia'] as num).toDouble();
-
-        // Calcular potência
-        double powerValue = voltageValue * currentValue;
-
+        voltageValue = (jsonResponse['tensao'] as num).toDouble();
+        currentValue = (jsonResponse['corrente'] as num).toDouble();
+        frequencyValue = (jsonResponse['frequencia'] as num).toDouble();
+        isOn = jsonResponse['ligado'];
+        wire1 = jsonResponse['Fio1'];
+        wire2 = jsonResponse['Fio2'];
         // Exibe os valores recebidos no terminal
         print(
-            'Dados recebidos: Tensão: $voltageValue, Corrente: $currentValue, Potência: $powerValue, Frequência: $frequencyValue');
+            'Dados recebidos: Tensão: $voltageValue, Corrente: $currentValue, Custo: $valor, Frequência: $frequencyValue');
 
         // Inserir dados no banco
-        await insertData(
-            voltageValue, currentValue, powerValue, frequencyValue);
+        await insertData(voltageValue, currentValue, valor, frequencyValue);
       } else {
         // Exibe o erro caso o código de status HTTP não seja 200
         print(
@@ -214,9 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Função que insere dados no banco de dados e processa as médias
-  // Função que insere dados no banco de dados e processa as médias
-  Future<void> insertData(double tensao, double corrente, double potencia,
-      double frequencia) async {
+  Future<void> insertData(
+      double tensao, double corrente, double custo, double frequencia) async {
     final Database db = await openDatabaseConnection();
 
     // Inserir os dados na tabela 'seconds'
@@ -226,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'sec_time': DateTime.now().millisecondsSinceEpoch,
         'sec_miliampers': corrente,
         'sec_volts': tensao,
-        'sec_value_kw': potencia,
+        'sec_value_kw': custo,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -489,7 +494,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         showUnselectedLabels: false,
-        backgroundColor: Color.fromARGB(255, 10, 21, 50),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color.fromARGB(255, 30, 82, 144)
+            : const Color.fromARGB(255, 10, 21, 50),
         selectedItemColor: Color.fromARGB(255, 137, 191, 255),
         unselectedItemColor: Colors.white,
         type: BottomNavigationBarType.fixed,
@@ -519,5 +526,98 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+}
+
+//Tela Home
+class Home extends StatelessWidget {
+  const Home({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return TelaHome();
+  }
+}
+
+// Tela de Histórico
+class TelaHistorico extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return HistoricPage(); // Tela de histórico
+  }
+}
+
+class TelaAlarme extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AlarmScreen();
+  }
+}
+
+class TelaConfig extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ConfigPage();
+  }
+}
+
+class AppController extends ChangeNotifier {
+  bool _isDartTheme = false;
+  bool get isDartTheme => _isDartTheme;
+
+  int _consumptionLimit = 0;
+  int get consumptionLimit => _consumptionLimit;
+
+  double? _costPerKwh;
+  double? get costPerKwh => _costPerKwh;
+
+  Future<void> loadPreferences() async {
+    await loadConsumptionLimit();
+    await loadThemePreference();
+    await loadCostPerKwh(); // Carregar custo do Kw/h
+  }
+
+  Future<void> loadConsumptionLimit() async {
+    _consumptionLimit = await DatabaseHelper().getConsumptionLimit() ?? 0;
+    print("Limite definido: $_consumptionLimit");
+    notifyListeners();
+  }
+
+  Future<void> setConsumptionLimit(int limit) async {
+    _consumptionLimit = limit; // Atualiza o valor localmente
+
+    await DatabaseHelper()
+        .saveConsumptionLimit(limit); // Salva no banco de dados
+    print("Limite definido: $_consumptionLimit"); // Print do Limite de Consumo
+    notifyListeners(); // Notifica para atualizar a interface
+  }
+
+  Future<void> loadThemePreference() async {
+    _isDartTheme = await DatabaseHelper().getThemePreference();
+    print("Preferência de tema carregada: $_isDartTheme"); // Print do valor
+    notifyListeners();
+  }
+
+  void changeTheme(bool isDart) async {
+    _isDartTheme = isDart;
+    // Salva a escolha de tema no banco de dados
+    await DatabaseHelper().saveThemePreference(isDart);
+    print(
+        "Preferência de tema carregada: $_isDartTheme"); // Print do valor, false = claro; true = escuro.
+    notifyListeners();
+  }
+
+  Future<void> loadCostPerKwh() async {
+    _costPerKwh = await DatabaseHelper().getCostPerKwh();
+    print("Custo do Kilowatt/h: $_costPerKwh");
+    notifyListeners();
+  }
+
+  Future<void> saveCostPerKwh(double cost) async {
+    _costPerKwh = cost;
+    valor = cost;
+    await DatabaseHelper().saveCostPerKwh(cost);
+    print("Custo do Kilowatt/h salvo: $_costPerKwh");
+    notifyListeners(); // Atualiza a interface com o novo valor
   }
 }

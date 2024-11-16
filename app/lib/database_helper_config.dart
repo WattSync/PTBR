@@ -102,3 +102,5 @@ class DatabaseHelper {
     return null; // Retorna null se não encontrar nenhum valor
   }
 }
+
+//isso aqui vai tudo para a main dps

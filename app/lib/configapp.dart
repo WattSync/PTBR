@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:wattsync/configdispositivo.dart';
 import 'package:flutter/services.dart';
 import 'database_helper_config.dart';
+import 'main.dart';
 
 /*void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -432,63 +433,4 @@ void _showLimitAdjustmentDialog(BuildContext context, int currentLimit) {
       );
     },
   );
-}
-
-class AppController extends ChangeNotifier {
-  bool _isDartTheme = false;
-  bool get isDartTheme => _isDartTheme;
-
-  int _consumptionLimit = 0;
-  int get consumptionLimit => _consumptionLimit;
-
-  double? _costPerKwh;
-  double? get costPerKwh => _costPerKwh;
-
-  Future<void> loadPreferences() async {
-    await loadConsumptionLimit();
-    await loadThemePreference();
-    await loadCostPerKwh(); // Carregar custo do Kw/h
-  }
-
-  Future<void> loadConsumptionLimit() async {
-    _consumptionLimit = await DatabaseHelper().getConsumptionLimit() ?? 0;
-    print("Limite definido: $_consumptionLimit");
-    notifyListeners();
-  }
-
-  Future<void> setConsumptionLimit(int limit) async {
-    _consumptionLimit = limit; // Atualiza o valor localmente
-    await DatabaseHelper()
-        .saveConsumptionLimit(limit); // Salva no banco de dados
-    print("Limite definido: $_consumptionLimit"); // Print do Limite de Consumo
-    notifyListeners(); // Notifica para atualizar a interface
-  }
-
-  Future<void> loadThemePreference() async {
-    _isDartTheme = await DatabaseHelper().getThemePreference();
-    print("Preferência de tema carregada: $_isDartTheme"); // Print do valor
-    notifyListeners();
-  }
-
-  void changeTheme(bool isDart) async {
-    _isDartTheme = isDart;
-    // Salva a escolha de tema no banco de dados
-    await DatabaseHelper().saveThemePreference(isDart);
-    print(
-        "Preferência de tema carregada: $_isDartTheme"); // Print do valor, false = claro; true = escuro.
-    notifyListeners();
-  }
-
-  Future<void> loadCostPerKwh() async {
-    _costPerKwh = await DatabaseHelper().getCostPerKwh();
-    print("Custo do Kilowatt/h: $_costPerKwh");
-    notifyListeners();
-  }
-
-  Future<void> saveCostPerKwh(double cost) async {
-    _costPerKwh = cost;
-    await DatabaseHelper().saveCostPerKwh(cost);
-    print("Custo do Kilowatt/h salvo: $_costPerKwh");
-    notifyListeners(); // Atualiza a interface com o novo valor
-  }
 }

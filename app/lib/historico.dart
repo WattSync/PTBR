@@ -4,13 +4,10 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'dart:async';
 
-// Tela de Histórico
 class TelaHistorico extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: HistoricPage(), // Tela de histórico
-    );
+    return HistoricPage();
   }
 }
 
@@ -231,8 +228,8 @@ class HistoricPageState extends State<HistoricPage> {
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color.fromARGB(255, 10, 21, 50)
-            : const Color.fromARGB(255, 30, 82, 144),
+            ? const Color.fromARGB(255, 30, 82, 144)
+            : const Color.fromARGB(255, 10, 21, 50),
       ),
       body: SingleChildScrollView(
         child: Column(

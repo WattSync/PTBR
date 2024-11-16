@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'configapp.dart';
 
 //CONSTRUIÇÃO DA TELA DO CELULAR
 bool temadispositivo = false;
@@ -13,8 +11,6 @@ class configDispositivo extends StatefulWidget {
 class configDispositivoState extends State<configDispositivo> {
   @override
   Widget build(BuildContext context) {
-    final appController = Provider.of<AppController>(context);
-
     return Scaffold(
         appBar: AppBar(
           iconTheme: IconThemeData(
@@ -112,39 +108,34 @@ class configDispositivoState extends State<configDispositivo> {
                           children: [
                             Radio<bool>(
                               value: false,
-                              groupValue:
-                                  temadispositivo, // Agora é baseado em temadispositivo
-                              fillColor:
-                                  MaterialStateProperty.resolveWith<Color>(
-                                      (Set<MaterialState> states) {
-                                return temadispositivo
+                              groupValue: temadispositivo,
+                              fillColor: MaterialStateProperty.all<Color>(
+                                Theme.of(context).brightness == Brightness.dark
                                     ? Colors.white
-                                    : Colors
-                                        .black; // Define a cor com base em temadispositivo
-                              }),
+                                    : Colors.black,
+                              ),
                               onChanged: (bool? value) {
                                 if (value != null) {
-                                  temadispositivo =
-                                      value; // Altera o valor de temadispositivo diretamente
+                                  setState(() {
+                                    temadispositivo =
+                                        value; // Altera o valor de temadispositivo diretamente
+                                  });
                                 }
                               },
                             ),
                             Radio<bool>(
                               value: true,
-                              groupValue:
-                                  temadispositivo, // Também baseado em temadispositivo
-                              fillColor:
-                                  MaterialStateProperty.resolveWith<Color>(
-                                      (Set<MaterialState> states) {
-                                return temadispositivo
+                              groupValue: temadispositivo,
+                              fillColor: MaterialStateProperty.all<Color>(
+                                Theme.of(context).brightness == Brightness.dark
                                     ? Colors.white
-                                    : Colors
-                                        .black; // Define a cor com base em temadispositivo
-                              }),
+                                    : Colors.black,
+                              ),
                               onChanged: (bool? value) {
                                 if (value != null) {
-                                  temadispositivo =
-                                      value; // Altera o valor de temadispositivo diretamente
+                                  setState(() {
+                                    temadispositivo = value;
+                                  });
                                 }
                               },
                             ),

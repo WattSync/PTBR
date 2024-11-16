@@ -1,23 +1,6 @@
 import 'package:flutter/material.dart';
 import 'database_helper.dart';
 
-void main() {
-  runApp(TelaAlarme());
-}
-
-class TelaAlarme extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Alarm Manager',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: AlarmScreen(),
-    );
-  }
-}
-
 class AlarmScreen extends StatefulWidget {
   @override
   _AlarmScreenState createState() => _AlarmScreenState();
@@ -158,7 +141,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Alarm Manager'),
+        title: Text(
+          'Gerenciador de Ativação',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color.fromARGB(255, 30, 82, 144)
+            : const Color.fromARGB(255, 10, 21, 50),
       ),
       body: ListView.builder(
         itemCount: _alarms.length,
@@ -184,7 +173,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
               ),
             ),
             child: Card(
-              color: Color.fromARGB(255, 116, 50, 157),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Color.fromARGB(255, 66, 14, 84)
+                  : Color.fromARGB(255, 116, 50, 157),
               margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               child: Padding(
                 padding: const EdgeInsets.all(10.0),
@@ -206,8 +197,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             int isActive = value ? 1 : 0;
                             _updateAlarmStatus(alarm['id'], isActive);
                           },
+                          activeColor: Colors.white,
+                          inactiveTrackColor: Colors.grey[300],
+                          inactiveThumbColor: Colors.white,
                           activeTrackColor:
-                              const Color.fromARGB(255, 137, 191, 255),
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? const Color.fromARGB(255, 30, 82, 144)
+                                  : const Color.fromARGB(255, 137, 191, 255),
                         ),
                       ],
                     ),
@@ -295,6 +291,11 @@ class _AlarmScreenState extends State<AlarmScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _addAlarm,
         child: Icon(Icons.add),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Color.fromARGB(255, 66, 14, 84)
+            : Color.fromARGB(255, 116, 50, 157),
+        foregroundColor:
+            Colors.white, // Cor do ícone (ajuste conforme desejado)
       ),
     );
   }
@@ -306,18 +307,25 @@ class _AlarmScreenState extends State<AlarmScreen> {
         int newSelectedState = isSelected ? 0 : 1;
         _updateAlarmDay(id, day, newSelectedState);
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color.fromARGB(255, 137, 191, 255)
+              ? (Theme.of(context).brightness == Brightness.dark
+                  ? const Color.fromARGB(255, 30, 82, 144)
+                  : const Color.fromARGB(255, 137, 191, 255))
               : Colors.grey[300],
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: Colors.black,
+            color: isSelected
+                ? (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black)
+                : Colors.black,
             fontWeight: FontWeight.bold,
             fontSize: 17,
           ),

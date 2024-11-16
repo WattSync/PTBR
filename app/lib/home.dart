@@ -2,20 +2,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'medidor.dart';
-import 'dart:convert';
 import 'main.dart';
 
-bool animation = true;
-double currentValue = 0;
-double voltageValue = 0;
-double powerValue = 0;
-double frequencyValue = 0;
-bool isOn = false;
-bool wire1 = false;
-bool wire2 = false;
+bool animation =
+    true; // isso aqui se colocar false desliga todas as animações dos medidores, tem que fazer para o gráfico tbm
+double currentValue = 0; //isso vem do main
+double voltageValue = 0; //isso tbm
+double powerValue = 0; //isso dá para fazer aqui
+double frequencyValue = 0; //tbm vem
+bool isOn = false; //vem
+bool wire1 = false; //vem
+bool wire2 = false; //vem
 Timer? _timer;
 
 class Home extends StatelessWidget {
@@ -49,35 +47,56 @@ class _TelaHomeState extends State<TelaHome> {
       texto1 = 'Nenhuma rede identificada.';
       texto2 = '';
       textStyle1 = TextStyle(
-          color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold);
+          color: /*Theme.of(context).brightness == Brightness.dark
+              ? Colors.white
+              : */
+              Colors.black,
+          fontSize: 16,
+          fontWeight: FontWeight.bold);
       textStyle2 = TextStyle(
-          color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold);
+          color: /*Theme.of(context).brightness == Brightness.dark
+              ? Colors.white
+              : */
+              Colors.black,
+          fontSize: 16,
+          fontWeight: FontWeight.bold);
     } else {
       if (wire1) {
         texto1 = "Fase";
         textStyle1 = TextStyle(
-            color: Color.fromARGB(255, 129, 11, 11),
+            color: /*Theme.of(context).brightness == Brightness.dark
+                ? Color.fromARGB(255, 255, 137, 137)
+                : */
+                Color.fromARGB(255, 129, 11, 11),
             fontSize: 16,
             fontWeight: FontWeight.bold);
       }
       if (!wire1) {
         texto1 = 'Neutro';
         textStyle1 = TextStyle(
-            color: Color.fromARGB(255, 30, 82, 144),
+            color: /*Theme.of(context).brightness == Brightness.dark
+                ? Color.fromARGB(255, 137, 191, 255)
+                : */
+                Color.fromARGB(255, 30, 82, 144),
             fontSize: 16,
             fontWeight: FontWeight.bold);
       }
       if (wire2) {
         texto2 = ' Fase';
         textStyle2 = TextStyle(
-            color: Color.fromARGB(255, 129, 11, 11),
+            color: /*Theme.of(context).brightness == Brightness.dark
+                ? Color.fromARGB(255, 255, 137, 137)
+                :*/
+                Color.fromARGB(255, 129, 11, 11),
             fontSize: 16,
             fontWeight: FontWeight.bold);
       }
       if (!wire2) {
         texto2 = ' Neutro';
         textStyle2 = TextStyle(
-            color: Color.fromARGB(255, 30, 82, 144),
+            color: //Theme.of(context).brightness == Brightness.dark
+                //  ? Color.fromARGB(255, 137, 191, 255)
+                /*:*/ Color.fromARGB(255, 30, 82, 144),
             fontSize: 16,
             fontWeight: FontWeight.bold);
       }
@@ -88,6 +107,7 @@ class _TelaHomeState extends State<TelaHome> {
   void initState() {
     super.initState();
     fetchDataList(); // Buscar dados do banco assim que a tela for carregada
+    startTimer();
   }
 
   void startTimer() {
@@ -120,10 +140,11 @@ class _TelaHomeState extends State<TelaHome> {
     String typeColumn = 'lst_day_ampers'; // Corrente em amperes
     String voltColumn = 'lst_day_volts'; // Tensão em volts
     String valueColumn =
-        'lst_day_value_kw'; // Se houver valor do kWh, pode ser usado aqui
+        'lst_day_value_kw'; // aqui é melhor, puxa diretamente da tabela, ignora aquele debaixo
 
     // Definir o valor do kWh em reais (exemplo: 0.60 reais por kWh)
-    double precoKWh = 0.85;
+    double precoKWh =
+        0.85; //isso aqui vem da config, que deve ser inserida no banco tbm, mas isso faz dps
 
     // Obter registros dos últimos 30 dias
     final List<Map<String, dynamic>> records = await db.query(
@@ -184,7 +205,7 @@ class _TelaHomeState extends State<TelaHome> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'WattSync - Home',
+          'WattSync',
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: backgroundColor,
